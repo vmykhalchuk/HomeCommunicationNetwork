@@ -33,11 +33,11 @@ void loop() {
   rs485writeByte(0xF1);
   rs485writeByte(0x01);
   buzz();
-  delay(1000);
+  delay(5000);
   rs485writeByte(0xF1);
   rs485writeByte(0x00);
   buzz();
-  delay(1000);
+  delay(5000);
 }
 
 void rs485writeByte(int byteToSend) {
