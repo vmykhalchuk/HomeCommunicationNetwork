@@ -8,6 +8,7 @@
 #define RS485Receive     LOW
 
 #define PinLED           13
+#define PinBuzzer        12
 
 SoftwareSerial RS485Serial(SSerialRX, SSerialTX);
 int byteReceived;
@@ -22,6 +23,7 @@ void setup() {
   pinMode(SSerialTxControl, OUTPUT);
 
   pinMode(PinLED, OUTPUT);
+  pinMode(PinBuzzer, OUTPUT);
 
   digitalWrite(SSerialTxControl, RS485Receive);
   RS485Serial.begin(4800);//try 4800 if that fails!
@@ -29,7 +31,15 @@ void setup() {
 
 boolean receivedIdByte = false;
 int cc = 0;
+boolean buzzerState = LOW;
+
 void loop() {
+  digitalWrite(PinBuzzer, buzzerState);
+  if (buzzerState == LOW) {
+    buzzerState = HIGH;
+  } else {
+    buzzerState = LOW;
+  }
   /*if (cc++ == 32000) {
     digitalWrite(PinLED, HIGH);
     delay(50);
@@ -75,8 +85,8 @@ int rs485ReadByte() {
 }
 
 void rs485WriteByte(int byteToWrite) {
-digitalWrite(SSerialTxControl, RS485Transmit);
-RS485Serial.write(byteToWrite);
-digitalWrite(SSerialTxControl, RS485Receive);
+  digitalWrite(SSerialTxControl, RS485Transmit);
+  RS485Serial.write(byteToWrite);
+  digitalWrite(SSerialTxControl, RS485Receive);
 }
 

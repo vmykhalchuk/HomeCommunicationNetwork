@@ -32,7 +32,7 @@ boolean receivedIdByte = false;
 int cc = 0;
 int cc2 = 0;
 void loop() {
-  if (cc++ == 32000) {
+  /*if (cc++ == 32000) {
     if (cc2++ == 10) {
       digitalWrite(PinLED, HIGH);
       delay(50);
@@ -40,7 +40,7 @@ void loop() {
       cc2 = 0;
     }
     cc = 0;
-  }
+  }*/
   if (Serial.available()) {
     if (receivedIdByte) {
       receivedIdByte = false;
@@ -69,5 +69,5 @@ void markError(int c) {
     digitalWrite(PinLED, LOW);
     delay(150);
   }
-  delay(1000);
+  delay(10000);
 }
