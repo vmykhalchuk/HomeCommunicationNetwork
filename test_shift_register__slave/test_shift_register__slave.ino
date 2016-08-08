@@ -13,6 +13,7 @@
 #define RS485Transmit          HIGH
 #define RS485Receive           LOW
 
+// see https://www.arduino.cc/en/Tutorial/ShiftIn
 #define INPUT_LATCH_PIN        4
 #define INPUT_CLOCK_PIN        5
 #define INPUT_REGISTER_1_PIN   6
