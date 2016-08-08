@@ -76,21 +76,21 @@ boolean readStatusesStep1 = true;
 #define tick() { if (readStatusesStep1) readStatuses_1(); else readStatuses_2(); readStatusesStep1 = !readStatusesStep1; }
 
 void writeByte(int byteToWrite) {
-  Serial.write(byteToWrite);
+  Serial.print(' ');
+  Serial.print(byteToWrite, BIN);
 }
 
 void loop() {
   resetStatuses();
   //wait - no hurry to reply
-  for (int i = 0; i < 200; i++) {
+  for (int i = 0; i < 500; i++) {
     delayMicroseconds(500);
     tick();
   }
-  writeByte(0xFF);
-  writeByte(0x00);
-  writeByte(0xFF);
+  Serial.print("D:");
   writeByte(receivedByteReg1);
   writeByte(receivedByteReg2);
   writeByte(receivedByteReg3);
+  Serial.println();
 }
 
