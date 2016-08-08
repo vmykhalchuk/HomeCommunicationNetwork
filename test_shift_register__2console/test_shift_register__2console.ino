@@ -35,15 +35,19 @@ void readStatuses() { // every next call will keep already triggered port, unles
   digitalWrite(INPUT_LATCH_PIN, HIGH);
   delayMicroseconds(20);
   digitalWrite(INPUT_LATCH_PIN, LOW);
-  for (int i = 0; i < 8; i++) {
-    readStatusesBit(i);
+  for (int i = 8; i > 0; i--) {
+    readStatusesBit(i-1);
   }
 }
 
-void readStatusesBit(int i) {
+void clockInputRegisters() {
   digitalWrite(INPUT_CLOCK_PIN, HIGH);
   delayMicroseconds(20);
   digitalWrite(INPUT_CLOCK_PIN, LOW);
+}
+
+void readStatusesBit(int i) {
+  clockInputRegisters();
   int z = (digitalRead(INPUT_REGISTER_1_PIN) ? 1 : 0) << i;
   receivedByteReg1 |= z;
   z = (digitalRead(INPUT_REGISTER_2_PIN) ? 1 : 0) << i;
@@ -56,15 +60,17 @@ void readStatuses_1() { // same as readStatuses, however split on two functions 
   digitalWrite(INPUT_LATCH_PIN, HIGH);
   delayMicroseconds(20);
   digitalWrite(INPUT_LATCH_PIN, LOW);
-  for (int i = 0; i < 3; i++) {
-    readStatusesBit(i);
+  delayMicroseconds(20);
+  clockInputRegisters();
+  for (int i = 8; i > 5; i--) {
+    readStatusesBit(i-1);
   }
 }
 
 int buzzerStatus = LOW;
 void readStatuses_2() {
-  for (int i = 3; i < 8; i++) {
-    readStatusesBit(i);
+  for (int i = 5; i > 0; i--) {
+    readStatusesBit(i-1);
   }
   if (receivedByteReg2 != 0) {
     digitalWrite(PinLED, HIGH);
