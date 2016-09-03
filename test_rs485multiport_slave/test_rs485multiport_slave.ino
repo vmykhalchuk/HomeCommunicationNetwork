@@ -2,21 +2,37 @@
 
 // Direct access to ports: https://www.arduino.cc/en/Reference/PortManipulation
 
+int outputBufSize = 0;
+
 void setup() {
   pinMode(13, OUTPUT);
   Serial.begin(9600);
   while (!Serial) {
   }
-  //DDRD = DDRD & B00000011; // set D2-D7 as inputs
-  //if (digitalRead(A0)) {
-    // Enable pull-ups on D0 registers
-    for (int i = 2; i < 8; i++) {
-      digitalWrite(i, HIGH);
-    }
-  //}
+  outputBufSize = Serial.availableForWrite();
+  delay(3000);
+  while (Serial.available()) {
+    Serial.read();
+  }
+  
+  // set D2-D7 as inputs
+  DDRD = DDRD & B00000011;
+  // Enable pull-ups on D0 registers
+  for (int i = 2; i < 8; i++) { digitalWrite(i, HIGH); }
+
+  handleError(10);
 }
 
-int count = 0;
+void handleError(byte errNo) {
+  pinMode(13, OUTPUT);
+  for (int i = 0; i < errNo; i++) {
+    digitalWrite(13,HIGH);
+    delay(150);
+    digitalWrite(13,LOW);
+    delay(250);
+  }
+  delay(6000);
+}
 
 int sentData_D = 0xFF;
 int changedBits_D = 0x00;
@@ -43,7 +59,8 @@ void summarizeAndReset() {
   changedBits_C = 0x00;
 }
 
-void loop() {
+int count = 0;
+void loop__() {
   for (int i = 0; i < 1000; i++) {
     delay(1);
     updatePortsData();
@@ -59,7 +76,7 @@ void loop() {
 
   // wait for write operation to complete
   //Serial.flush(); // option 1
-  while (Serial.availableForWrite() > 0) { // option 2
+  while (Serial.availableForWrite() != outputBufSize) { // option 2
     updatePortsData();
   }
   
@@ -70,5 +87,87 @@ void loop() {
     digitalWrite(13, LOW);
     count = 0;
   }
+}
+
+
+static int COUNTERS_ON_SINGLE_BYTE = 2000; // Adjust for single byte (depending on Serial speed)
+static int COUNTERS_ON_SINGLE_BYTE__WRITE = 3000; // Adjust for writing loop
+boolean lastSentFailed = false;// send previous data due to transmission error!
+int p_D = 0;
+
+boolean availableTimedOut(int timeOut) {
+  int i = timeOut;
+  while(!Serial.available()) {
+    updatePortsData();
+    if (--i == 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * This loop is waiting for a request from Master in order to send its status.
+ * Communication protocol is following:
+ * 
+ * M: 0xA5 - initiate transmission, all slaves - listen!
+ * M: 0xAn, n - ID of slave to listen
+ * M: ~0xAn
+ * 
+ * S: 0xAn
+ * S: {p_D}
+ * S: ~{p_D}
+ * 
+ * M: {p_D}
+ * M: 0xA6 - receipt acknowledge
+ */
+void loop() {
+  if (!availableTimedOut(COUNTERS_ON_SINGLE_BYTE) || Serial.read() != 0xA5) { // start communication token (all slaves - listen!)
+    //handleError(1);
+    return;
+  }
+  
+  if (!availableTimedOut(COUNTERS_ON_SINGLE_BYTE) || Serial.read() != 0xA0) { // My ID is 0, 0xAn - where n is slave ID, up to 16 Slaves support
+    return;
+  }
+  if (!availableTimedOut(COUNTERS_ON_SINGLE_BYTE) || Serial.read() != 0xAF) { // repeat ID inverted, for transmission check!
+    handleError(2);
+    return;
+  }
+
+  // now wait a little and send back status
+  if (availableTimedOut(100)) {
+    // we do not expect anything on Serial!
+    handleError(3);
+    return;
+  }
+
+  if (!lastSentFailed) {
+    summarizeAndReset();
+    p_D = sentData_D & B11111100;
+    //int p_B = sentData_B & 
+    //int p_C = 
+  }
+  Serial.write(0xA0); // send my ID
+  Serial.write(p_D);  // send data
+  Serial.write(~p_D); // send data inverted
+
+  while (Serial.availableForWrite() != outputBufSize) {
+    updatePortsData();
+  }
+
+  if (!availableTimedOut(COUNTERS_ON_SINGLE_BYTE) || Serial.read() != p_D) { // Receipt acknowledged (with received data)
+    handleError(4);
+    lastSentFailed = true;
+    return;
+  }
+
+  if (!availableTimedOut(COUNTERS_ON_SINGLE_BYTE) || Serial.read() != 0xA6) { // Receipt acknowledged
+    handleError(5);
+    lastSentFailed = true;
+    return;
+  }
+
+  lastSentFailed = false;
 }
 

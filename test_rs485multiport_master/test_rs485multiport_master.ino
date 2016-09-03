@@ -13,15 +13,12 @@ void setup() {
   while (!Serial) {
   }
   DDRD = DDRD | B11111100; // set D2-D7 as outputs
-  //Serial.setTimeout(5000);
   //mySerial.begin(9600);
 }
 
 byte buff[100];
 int errors = 0;
 void handleError(byte errNo) {
-  //mySerial.println("Err:" + errNo);
-  //mySerial.flush();
   for (int i = 0; i < errNo; i++) {
     digitalWrite(13,HIGH);
     delay(150);
@@ -29,13 +26,6 @@ void handleError(byte errNo) {
     delay(250);
   }
   delay(6000);
-  
-  /*if (errors == 5) {
-    errors++;
-    digitalWrite(13, HIGH);
-  } else {
-    errors++;
-  }*/
 }
 
 boolean availableTimedOut() {
