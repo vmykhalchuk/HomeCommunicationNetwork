@@ -2,15 +2,12 @@
 
 // This is master for two way communication!
 
-int outputBufSize = 0;
-
 SoftwareSerial mySerial(10, 11); // RX, TX
 
 void setup() {
   Serial.begin(9600);
   while (!Serial) {
   }
-  outputBufSize = Serial.availableForWrite();
   delay(3000);
   while (Serial.available()) {
     Serial.read();
@@ -30,7 +27,7 @@ void handleError(byte errNo) {
   delay(6000);
 }
 
-static int COUNTERS_ON_SINGLE_BYTE = 3000; // Adjust for single byte (depending on Serial speed)
+static int COUNTERS_ON_SINGLE_BYTE = 3000; // Adjust for single byte (depending on Serial speed and clock speed)
 
 boolean availableTimedOut(int timeOut) {
   int i = timeOut;
@@ -42,43 +39,57 @@ boolean availableTimedOut(int timeOut) {
   return true;
 }
 
-void loop() {
-  delay(6000);
+/**
+ * slaveNo - from 0 to F
+ * p_D port D state (single byte)
+ * return error, 0 if OK
+ */
+int readPortsSlaveState(int slaveNo, int & port_D) {
   while (Serial.available()) {
     Serial.read();
-    handleError(1);
+    return 1;
   }
   
   Serial.write(0xA5);
   Serial.write(0xA0);
   Serial.write(0xAF);
 
-  int o = 0;
-  while(Serial.availableForWrite() != outputBufSize) {
-    o++;
+  while (Serial.transmitting()) {
+    if (Serial.available()) {
+      return 2;
+    }
   }
-  // problem is here!!! it doesn't wait for data to be sent!!!
-  // try sending to mySerial to see whats happening here!
-  mySerial.write(o);
 
   if (!availableTimedOut(COUNTERS_ON_SINGLE_BYTE) || Serial.read() != 0xA0) { // wrong reply! should be Slave ID!
-    handleError(2);
-    return; // error!
+    return 3;
   }
   if (!availableTimedOut(COUNTERS_ON_SINGLE_BYTE)) {
-    handleError(3);
-    return; // error!
+    return 4; // error!
   }
   int p_D = Serial.read();
   if (!availableTimedOut(COUNTERS_ON_SINGLE_BYTE) || (byte)Serial.read() != (byte)~p_D) {
-    handleError(4);
-    return; // error!
+    return 5; // error!
   }
   
   Serial.write(p_D);
   Serial.write(0xA6);
-  while(Serial.availableForWrite()  != outputBufSize) {
+  while (Serial.transmitting()) {
+    if (Serial.available()) {
+      return 6;
+    }
   }
+  port_D = p_D;
+  return 0;
+}
 
-  mySerial.write(p_D);
+void loop() {
+  delay(6000);
+
+  mySerial.println("----");
+  int port_D = 0;
+  int error = readPortsSlaveState(0, port_D);
+  if (error != 0) {
+    handleError(error);
+  }
+  mySerial.println(port_D);
 }

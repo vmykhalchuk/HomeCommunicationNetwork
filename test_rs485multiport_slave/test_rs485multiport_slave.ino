@@ -1,26 +1,24 @@
 // Slave board
 
 // Direct access to ports: https://www.arduino.cc/en/Reference/PortManipulation
-
-int outputBufSize = 0;
+// Serial.transmitting() - return false if transmission is over or true if still transmitting
 
 void setup() {
   pinMode(13, OUTPUT);
   Serial.begin(9600);
   while (!Serial) {
   }
-  outputBufSize = Serial.availableForWrite();
   delay(3000);
   while (Serial.available()) {
     Serial.read();
   }
   
   // set D2-D7 as inputs
-  DDRD = DDRD & B00000011;
+  DDRD &= B00000011;
   // Enable pull-ups on D0 registers
   for (int i = 2; i < 8; i++) { digitalWrite(i, HIGH); }
 
-  handleError(10);
+  handleError(7);
 }
 
 void handleError(byte errNo) {
@@ -76,7 +74,7 @@ void loop__() {
 
   // wait for write operation to complete
   //Serial.flush(); // option 1
-  while (Serial.availableForWrite() != outputBufSize) { // option 2
+  while (Serial.transmitting()) { // option 2 (requires modified Arduino)
     updatePortsData();
   }
   
@@ -91,7 +89,6 @@ void loop__() {
 
 
 static int COUNTERS_ON_SINGLE_BYTE = 2000; // Adjust for single byte (depending on Serial speed)
-static int COUNTERS_ON_SINGLE_BYTE__WRITE = 3000; // Adjust for writing loop
 boolean lastSentFailed = false;// send previous data due to transmission error!
 int p_D = 0;
 
@@ -121,6 +118,7 @@ boolean availableTimedOut(int timeOut) {
  * M: {p_D}
  * M: 0xA6 - receipt acknowledge
  */
+
 void loop() {
   if (!availableTimedOut(COUNTERS_ON_SINGLE_BYTE) || Serial.read() != 0xA5) { // start communication token (all slaves - listen!)
     //handleError(1);
@@ -129,6 +127,7 @@ void loop() {
   
   if (!availableTimedOut(COUNTERS_ON_SINGLE_BYTE) || Serial.read() != 0xA0) { // My ID is 0, 0xAn - where n is slave ID, up to 16 Slaves support
     return;
+    // improved mechanism can be where we actively read communication with other slave, so we do not accidentaly engage into it. For example we can read that ID is not us, but we read and monitor all transmission, and see if it stops or corrupts, so we can only then start monitoring for beginning of new transmission which can be directed to us
   }
   if (!availableTimedOut(COUNTERS_ON_SINGLE_BYTE) || Serial.read() != 0xAF) { // repeat ID inverted, for transmission check!
     handleError(2);
@@ -152,7 +151,7 @@ void loop() {
   Serial.write(p_D);  // send data
   Serial.write(~p_D); // send data inverted
 
-  while (Serial.availableForWrite() != outputBufSize) {
+  while (Serial.transmitting()) {
     updatePortsData();
   }
 
