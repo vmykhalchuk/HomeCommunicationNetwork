@@ -1,0 +1,47 @@
+
+	0) NEW MODULE INSTALLED
+		system knows types of modules and can try to use it to identify its location and function
+		then by user acknowledgment - system can assign function to the module
+
+		(*) function should be stored separately from module, having ID tag 
+			outside module (in socket to module), only thing - if it is damaged, what to do, unless it is resistors
+
+	1) MODULE REPLACEMENT ON SAME TYPE
+		For that to work - we need to identify new module as a replacement of old one 
+			(load its identification or replace it in system)
+
+	1b) MODULE REPLACEMENT ON NEW TYPE
+		same as removing module and installing new one
+
+	1c) HOT REPLACEMENT
+		How to hot start with no memory, or no ID (when replacing on new module)
+		Question is on how to load configuration and prepare to continue work
+
+	2) MCU REPLACEMENT
+		For that to work - we need to load program to MCU
+		Module can have ID for MCU program
+
+	3) MODULE IS REMOVED
+
+	4) SYSTEM RESET
+		Reset every module one by one
+
+-----------------------------------------------------
+ * M: 0xA5 - initiate transmission, all slaves - listen!
+ * M: 0xBn, n - ID of slave to listen
+ * M: ~0xBn
+ * M: [size] - [0xS][~0xS]
+ * M: [message] - size bytes
+ * M: [crc] - of the message
+ * 
+ * S: 0xBn
+ * S: {p_D}
+ * S: ~{p_D}
+ * 
+ * M: {p_D}
+ * M: 0xA6 - receipt acknowledge
+-----------------------------------------------------
+		
+??? what to do if requests are not sent regularly (if communication is not regular)
+
+

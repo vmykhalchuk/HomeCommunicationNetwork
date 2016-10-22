@@ -17,13 +17,19 @@
     SYS.event("z02") => 
 
 	
+Auto-discovery mechanism:
+1) If module connection lost => 
+2) Once per ten communication cycles => Ask if new modules installed
+3) Recover module ID when module data was cleared
+	
+	
 Procedures:
 X1) turn on/off {on_off} system armed led
                                               (0..2)           B01000000
     D[$DEV_ARM_LED].action(set_port_[$DEV_ARM_LED__PORT], $DEV_ARM_LED__MASK, $on_off);
 
 X2) Send SMS to owner {ownerNo}, {message}
-    if ($gsm_no_signal) > { delayedCall(self, 2000); return; }
+    if ($gsm_no_signal) > { delayedCall(self, [$ownerNo, $message] , 2000); return; }
     D[$DEV_GSM].action(send_sms, $OWNERS_PHONE_NUMBERS[$ownerNo], $message); $gsm_sms_sending = true;
 
 
