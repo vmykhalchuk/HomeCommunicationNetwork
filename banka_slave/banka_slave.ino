@@ -1,10 +1,20 @@
+/*
+  Sleep for 8 seconds
+    when interrupt on input #1 - increase counter p1
+        if p1 >= 5; disable interrupt of #1
+    when interrupt on input #2 - increase counter p2
+        if p2 >= 5; disable interrupt of #2
+
+  If sleeping for 10 times => try sending results
+ */
+
 #include <SPI.h>
 #include "RF24.h"
 
 /* Hardware configuration: Set up nRF24L01 radio on SPI bus plus pins 7 & 8 */
 RF24 radio(7,8);
-byte addressMaster[6] = "MNode";
-byte addressSlave[6] = "SNode";
+byte addressMaster[6] = "MBank";
+byte addressSlave[6] = "1Bank";
 
 void setup() {
   Serial.begin(9600);
@@ -23,7 +33,7 @@ void setup() {
   // Start the radio listening for data
   radio.startListening();
 
-  Serial.println("Master Initialized");
+  Serial.println("Banka Initialized");
   delay(2000);
 }
 
@@ -34,7 +44,7 @@ void loop() {
     radio.stopListening();                                    // First, stop listening so we can talk.
     
     
-    Serial.println(F("Now sending2"));
+    Serial.println(F("Now sending"));
 
     unsigned long start_time = micros();                      // Take the time, and send it. This will block until complete
      if (!radio.write( &start_time, sizeof(unsigned long) )){
