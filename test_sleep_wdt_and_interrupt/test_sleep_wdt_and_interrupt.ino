@@ -3,22 +3,41 @@
 #include <avr/power.h>
 #include <avr/wdt.h>
 
-const byte interruptPin0 = 2;
-const byte interruptPin1 = 3;
-volatile byte interruptsOnPin0 = 0;
 const byte zoomerPin = 13;
 
-void pin0InterruptRoutine(void)
+const byte interruptPinA = 2;
+const byte interruptPinB = 3;
+volatile byte interruptsOnPinA = 0;
+volatile byte interruptsOnPinB = 0;
+
+void pinAInterruptRoutine(void)
 {
-  if (interruptsOnPin0 <= 0xD) {
-    interruptsOnPin0++;
+  Serial.print("A:");
+  Serial.println(interruptsOnPinA, HEX);
+  Serial.flush();
+  if (interruptsOnPinA <= 0xFD) {
+    interruptsOnPinA++;
   } else {
-    interruptsOnPin0 = 0xF;
+    interruptsOnPinA = 0xFF;
     /* We detach the interrupt to stop it from 
      * continuously firing while the interrupt pin
      * is low.
      */
-    detachInterrupt(digitalPinToInterrupt(interruptPin0));
+    detachInterrupt(digitalPinToInterrupt(interruptPinA));
+  }
+}
+
+void pinBInterruptRoutine(void)
+{
+  if (interruptsOnPinB <= 0xFD) {
+    interruptsOnPinB++;
+  } else {
+    interruptsOnPinB = 0xFF;
+    /* We detach the interrupt to stop it from 
+     * continuously firing while the interrupt pin
+     * is low.
+     */
+    detachInterrupt(digitalPinToInterrupt(interruptPinB));
   }
 }
 
@@ -39,27 +58,26 @@ ISR(WDT_vect)
     // another overrun, now lets reset mcu
     // Here we should reset CPU since this is a cause of unexpected behaviour!
     Serial.println("WDT Overrun!!!");
+    Serial.flush();
   }
 }
 
 inline void enterSleepAndAttachInterrupt(void)
 {
   cli();
-  interruptsOnPin0=0;
-  f_wdt=0;
   /* Setup pin2 as an interrupt and attach handler. */
             // digitalPinToInterrupt(2) => 0
             // digitalPinToInterrupt(3) => 1
             // digitalPinToInterrupt(1 | 4) => -1
-  attachInterrupt(digitalPinToInterrupt(interruptPin0), pin0InterruptRoutine, LOW); // can be LOW / CHANGE / HIGH / ...
+  attachInterrupt(digitalPinToInterrupt(interruptPinA), pinAInterruptRoutine, LOW); // can be LOW / CHANGE / HIGH / ...
+  attachInterrupt(digitalPinToInterrupt(interruptPinB), pinBInterruptRoutine, LOW);
 
-  enterSleepNoInterrupt();
+  enterSleep();
 }
 
-inline void enterSleepNoInterrupt(void)
+inline void enterSleep(void)
 {
   cli();
-  f_wdt=0;
   // allowed modes:
   // SLEEP_MODE_IDLE         (0)
   // SLEEP_MODE_ADC          _BV(SM0)
@@ -117,7 +135,8 @@ void setup()
   }
   
   /* Setup the pin direction. */
-  pinMode(interruptPin0, INPUT);
+  pinMode(interruptPinA, INPUT);
+  pinMode(interruptPinB, INPUT);
 
   if (false)
   { // don't know how to do it
@@ -157,35 +176,56 @@ void setup()
 
 void loop()
 {
-  cli();// disable interrupts (sei() = enable)
+  //cli();// disable interrupts (sei() = enable)
     // !!! delay() will not work when interrupt is disabled!
   if (f_wdt == 0) {
-    // not watchdog interrupt!
+    // not a watchdog interrupt!
     // so just put back to sleep
-    enterSleepNoInterrupt();
-  } else if (f_wdt == 1) {
-
-    {
-      // because delay will not work - we enable interrupt!
-      //detachInterrupt(digitalPinToInterrupt(interruptPin0));
-      //sei();
-    }
+    enterSleep();
     
+  } else if (f_wdt == 1) {
+    // this is a watchdog timer interrupt!
+
+    byte _intsOnPinA, _intsOnPinB;
+    { // read values and attach interrupts back again (in case they were detached due to overflow)
+      cli();
+      _intsOnPinA = interruptsOnPinA;
+      interruptsOnPinA = 0;
+      _intsOnPinB = interruptsOnPinB;
+      interruptsOnPinB = 0;
+      /* Setup pin2 as an interrupt and attach handler. */
+            // digitalPinToInterrupt(2) => 0
+            // digitalPinToInterrupt(3) => 1
+            // digitalPinToInterrupt(1 | 4) => -1
+      attachInterrupt(digitalPinToInterrupt(interruptPinA), pinAInterruptRoutine, LOW); // can be LOW / CHANGE / HIGH / ...
+      attachInterrupt(digitalPinToInterrupt(interruptPinB), pinBInterruptRoutine, LOW);
+      sei();
+    }
+
     // wake-up from sleep
     digitalWrite(zoomerPin, HIGH);
-      Serial.print("Ints: ");
-      Serial.println(interruptsOnPin0, HEX);
+      Serial.print("Interrupts on PinA & PinB: ");
+      Serial.print(_intsOnPinA, HEX);
+      Serial.print(" ");
+      Serial.println(_intsOnPinB, HEX);
       {
-      Serial.flush();
-      //delay(500);
+      //Serial.flush();
+      delay(500);
       }
     digitalWrite(zoomerPin, LOW);
     wdt_reset();
     // put to sleep with interrupt
-    enterSleepAndAttachInterrupt();
+    f_wdt=0;
+    enterSleep();
+    
   } else {
-    Serial.println("Program hanged!");
-    delay(2000);
+    // this happens only when mcu hangs for some reason
+    
+    cli();
+    while(true) {
+      Serial.println("Program hanged!");
+      Serial.flush();
+    }
   }
 }
 
