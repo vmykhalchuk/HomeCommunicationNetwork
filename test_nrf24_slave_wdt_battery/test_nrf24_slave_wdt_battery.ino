@@ -1,14 +1,10 @@
-/*
-  Sleep for 8 seconds
-    when interrupt on input #1 - increase counter p1
-        if p1 >= 5; disable interrupt of #1
-    when interrupt on input #2 - increase counter p2
-        if p2 >= 5; disable interrupt of #2
-
-  If sleeping for 10 times => try sending results
- */
+// purpose of this sketch is to send beacon signals every 8 seconds
 
 #include <SPI.h>
+#include <avr/interrupt.h>
+#include <avr/sleep.h>
+#include <avr/power.h>
+#include <avr/wdt.h>
 #include "RF24.h"
 
 /* Hardware configuration: Set up nRF24L01 radio on SPI bus plus pins 7 & 8 */
@@ -16,7 +12,10 @@ RF24 radio(7,8);
 byte addressMaster[6] = "MBank";
 byte addressSlave[6] = "1Bank";
 
+const byte pin_led = 13;
+
 void setup() {
+  pinMode(pin_led, OUTPUT);
   Serial.begin(9600);
   
   radio.begin();
@@ -31,50 +30,42 @@ void setup() {
   radio.openReadingPipe(1, addressSlave);
 
   // Start the radio listening for data
-  radio.startListening();
+  //radio.startListening();
 
   Serial.println(F("Banka Initialized"));
+  digitalWrite(pin_led, HIGH);
+  delay(2000);
+  digitalWrite(pin_led, LOW);
   delay(2000);
 }
 
-byte dataToSend[6];
-byte interruptsOnPin1BetweenCycles;
-byte interruptsOnPin2BetweenCycles;
-byte interruptsOnPin1Total;
-byte interruptsOnPin2Total;
+const byte interruptPin = 2;
 
-byte communicationFailures;
-byte communicationFailuresTotal;
-
-byte counter = 0;
-
-void onPin1Interrupt() { // same for pin2
-  if (interruptsOnPin1BetweenCycles <= 0xD) {
-    interruptsOnPin1BetweenCycles++;
-  } else {
-    interruptsOnPin1BetweenCycles = 0xF;
-    // disable interrupts on PIN1
-  }
+void pinInterruptRoutine(void)
+{
+  /* We detach the interrupt to stop it from 
+   * continuously firing while the interrupt pin
+   * is low.
+   */
+  detachInterrupt(0);
+  delay(100); // primitive debouncing
 }
 
-void loopEvery4Sec() {
-  if (interruptsOnPin1Total <= (0xFD - interruptsOnPin1BetweenCycles)) {
-    interruptsOnPin1Total += interruptsOnPin1BetweenCycles;
-  } else {
-    interruptsOnPin1Total = 0xFF;
-  }
-  if (interruptsOnPin2Total <= (0xFD - interruptsOnPin2BetweenCycles)) {
-    interruptsOnPin2Total += interruptsOnPin2BetweenCycles;
-  } else {
-    interruptsOnPin2Total = 0xFF;
-  }
-  
-  if (++counter == 10) {
-    // every 40 seconds try to communicate with Master
-    attemptSend
-  }
+ISR(WDT_vect)
+{
 }
 
+void enterSleep(void)
+{
+  cli();
+  set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+  /* Setup pin2 as an interrupt and attach handler. */
+  attachInterrupt(digitalPinToInterrupt(interruptPin), pinInterruptRoutine, LOW); // can be LOW / CHANGE / HIGH
+  sleep_enable();
+  sei();
+  sleep_cpu(); /* The program will continue from here. */ // it was : sleep_mode() , seems to be same functionality
+  sleep_disable();
+}
 
 
 void loop() {
@@ -83,8 +74,6 @@ void loop() {
     radio.stopListening();                                    // First, stop listening so we can talk.
     
     
-    Serial.println(F("Now sending"));
-
     unsigned long start_time = micros();                      // Take the time, and send it. This will block until complete
     if (!radio.write(&start_time, sizeof(unsigned long))) {
       Serial.println(F("failed"));
