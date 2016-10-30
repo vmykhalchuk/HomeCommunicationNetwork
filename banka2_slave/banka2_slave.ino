@@ -2,6 +2,8 @@
 #include <avr/sleep.h>
 #include <avr/power.h>
 #include <avr/wdt.h>
+#include <SPI.h>
+#include "RF24.h"
 
 const byte zoomerPin = 13;
 
@@ -69,7 +71,7 @@ inline void enterSleepAndAttachInterrupt(void)
             // digitalPinToInterrupt(2) => 0
             // digitalPinToInterrupt(3) => 1
             // digitalPinToInterrupt(1 | 4) => -1
-  attachInterrupt(digitalPinToInterrupt(interruptPinA), pinAInterruptRoutine, LOW); // can be LOW / CHANGE / HIGH / ...
+  attachInterrupt(digitalPinToInterrupt(interruptPinA), pinAInterruptRoutine, LOW); // can be LOW / CHANGE / HIGH / ... FALLING
   attachInterrupt(digitalPinToInterrupt(interruptPinB), pinBInterruptRoutine, LOW);
 
   enterSleep();
@@ -120,6 +122,45 @@ void setupWdt(boolean enableInterrupt, uint8_t prescaler)
   sei();
 }
 
+/* Hardware configuration: Set up nRF24L01 radio on SPI bus plus pins 7 & 8 */
+RF24 radio(7,8);
+byte addressMaster[6] = "MBank";
+byte addressSlave[6] = "1Bank";
+
+boolean setupRadio(void)
+{
+  if (!radio.begin())
+  {
+    return false;
+  }
+  // Set the PA Level low to prevent power supply related issues since this is a
+  // getting_started sketch, and the likelihood of close proximity of the devices. RF24_PA_MAX is default.
+  radio.setPALevel(RF24_PA_LOW); // RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH and RF24_PA_MAX
+  radio.setDataRate(RF24_250KBPS); // (default is RF24_1MBPS)
+  radio.setChannel(118); // 2.518 Ghz - Above most Wifi Channels (default is 76)
+  radio.setCRCLength(RF24_CRC_16); //(default is RF24_CRC_16)
+
+  radio.openWritingPipe(addressMaster);
+  radio.openReadingPipe(1, addressSlave);
+
+  return true;
+}
+
+volatile boolean isRadioUp = true;
+void putRadioDown()
+{
+  if (isRadioUp) {
+    radio.powerDown();
+  }
+  isRadioUp = false;
+}
+void putRadioUp()
+{
+  if (!isRadioUp) {
+    radio.powerUp();
+  }
+  isRadioUp = true;
+}
 
 void setup()
 {
@@ -158,8 +199,21 @@ void setup()
     // in order to recover ADC after sleep - write ADCSRA to memory and restore it after wakeup
   }
 
-  if (true) {
-    setupWdt(true, WDT_PRSCL_8s);
+  setupWdt(true, WDT_PRSCL_8s);
+
+  if (!setupRadio()) {
+    while(true) {
+      Serial.println("Radio Initialization failed!!!");
+      for (int i = 0; i < 5; i++) {
+        wdt_reset();
+        digitalWrite(zoomerPin, HIGH);
+        delay(300);
+        wdt_reset();
+        digitalWrite(zoomerPin, LOW);
+        delay(300);
+      }
+      delay(2000);
+    }
   }
 
   Serial.println("Initialization complete.");
@@ -174,18 +228,12 @@ void setup()
   
 }
 
-void loop()
-{
-  //cli();// disable interrupts (sei() = enable)
-    // !!! delay() will not work when interrupt is disabled!
-  if (f_wdt == 0) {
-    // not a watchdog interrupt!
-    // so just put back to sleep
-    enterSleep();
-    
-  } else if (f_wdt == 1) {
-    // this is a watchdog timer interrupt!
+byte transmitNowCounter = 0;
+byte lastTransmitFailed = 0;
 
+byte transmission[6];
+void initializeTransmission(void)
+{
     byte _intsOnPinA, _intsOnPinB;
     { // read values and attach interrupts back again (in case they were detached due to overflow)
       cli();
@@ -201,20 +249,50 @@ void loop()
       attachInterrupt(digitalPinToInterrupt(interruptPinB), pinBInterruptRoutine, LOW);
       sei();
     }
+    
+        transmission[0] = 0x11; // ID of this Banka(r)
+        transmission[1] = 0; // how many transmissions failed before
+        transmission[2] = _intsOnPinA;
+        transmission[3] = _intsOnPinB;
+}
 
-    // wake-up from sleep
-    digitalWrite(zoomerPin, HIGH);
-      Serial.print("Interrupts on PinA & PinB: ");
-      Serial.print(_intsOnPinA, HEX);
-      Serial.print(" ");
-      Serial.println(_intsOnPinB, HEX);
-      {
-        Serial.flush();
-        delay(500);
+
+void loop()
+{
+  if (f_wdt == 0) {
+    // not a watchdog interrupt!
+    // so just put back to sleep
+    enterSleep();
+    
+  } else if (f_wdt == 1) {
+    // this is a watchdog timer interrupt!
+
+
+    {
+       // usefull load here
+      if (transmitNowCounter == 6 /* 8sec * 7times = 56 seconds */ || lastTransmitFailed > 0) {
+        putRadioUp();
+        //
+          if (lastTransmitFailed == 0) {
+            initializeTransmission();
+          } else {
+            transmission[1] = lastTransmitFailed; // how many transmissions failed before
+          }
+          wdt_reset();
+          bool txSucceeded = radio.write(&transmission, sizeof(transmission));
+          wdt_reset();
+        //
+        putRadioDown();
+        lastTransmitFailed = txSucceeded ? 0 : lastTransmitFailed++;
+        lastTransmitFailed = lastTransmitFailed > 100 ? 1 : lastTransmitFailed; // avoid overload
+        if (lastTransmitFailed == 0) {
+          transmitNowCounter = transmitNowCounter == 6 ? 0 : transmitNowCounter++;
+        }
       }
-    digitalWrite(zoomerPin, LOW);
+    }
+    
     wdt_reset();
-    // put to sleep with interrupt
+    // put to sleep as normal
     f_wdt=0;
     enterSleep();
     
