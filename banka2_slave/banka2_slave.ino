@@ -5,7 +5,7 @@
 #include <SPI.h>
 #include "RF24.h"
 
-const byte zoomerPin = 13;
+const byte zoomerPin = 5; // cannot be 13 since radio is using it!
 
 const byte interruptPinA = 2;
 const byte interruptPinB = 3;
@@ -14,36 +14,26 @@ volatile byte interruptsOnPinB = 0;
 
 void pinAInterruptRoutine(void)
 {
-  Serial.print("A:");
-  Serial.println(interruptsOnPinA, HEX);
-  Serial.flush();
-  if (interruptsOnPinA <= 0xFD) {
+  if (interruptsOnPinA <= 0xD) {
     interruptsOnPinA++;
   } else {
-    interruptsOnPinA = 0xFF;
-    /* We detach the interrupt to stop it from 
-     * continuously firing while the interrupt pin
-     * is low.
-     */
+    interruptsOnPinA = 0xF;
     detachInterrupt(digitalPinToInterrupt(interruptPinA));
   }
 }
 
 void pinBInterruptRoutine(void)
 {
-  if (interruptsOnPinB <= 0xFD) {
+  if (interruptsOnPinB <= 0xD) {
     interruptsOnPinB++;
   } else {
-    interruptsOnPinB = 0xFF;
-    /* We detach the interrupt to stop it from 
-     * continuously firing while the interrupt pin
-     * is low.
-     */
+    interruptsOnPinB = 0xF;
     detachInterrupt(digitalPinToInterrupt(interruptPinB));
   }
 }
 
 volatile byte f_wdt=1;
+volatile byte wdt_overruns = 0;
 ISR(WDT_vect)
 {
   if (f_wdt == 0)
@@ -59,6 +49,7 @@ ISR(WDT_vect)
   {
     // another overrun, now lets reset mcu
     // Here we should reset CPU since this is a cause of unexpected behaviour!
+    wdt_overruns++;
     Serial.println("WDT Overrun!!!");
     Serial.flush();
   }
@@ -135,7 +126,7 @@ boolean setupRadio(void)
   }
   // Set the PA Level low to prevent power supply related issues since this is a
   // getting_started sketch, and the likelihood of close proximity of the devices. RF24_PA_MAX is default.
-  radio.setPALevel(RF24_PA_LOW); // RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH and RF24_PA_MAX
+  radio.setPALevel(RF24_PA_MAX); // RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH and RF24_PA_MAX
   radio.setDataRate(RF24_250KBPS); // (default is RF24_1MBPS)
   radio.setChannel(118); // 2.518 Ghz - Above most Wifi Channels (default is 76)
   radio.setCRCLength(RF24_CRC_16); //(default is RF24_CRC_16)
@@ -204,15 +195,15 @@ void setup()
   if (!setupRadio()) {
     while(true) {
       Serial.println("Radio Initialization failed!!!");
-      for (int i = 0; i < 5; i++) {
-        wdt_reset();
+      for (int i = 0; i < 3; i++) {
         digitalWrite(zoomerPin, HIGH);
-        delay(300);
-        wdt_reset();
+        delay(500);
         digitalWrite(zoomerPin, LOW);
-        delay(300);
+        delay(500);
+        wdt_reset();
       }
       delay(2000);
+      wdt_reset();
     }
   }
 
@@ -232,6 +223,7 @@ byte transmitNowCounter = 0;
 byte lastTransmitFailed = 0;
 
 byte transmission[6];
+byte transmissionNo = 0;
 void initializeTransmission(void)
 {
     byte _intsOnPinA, _intsOnPinB;
@@ -250,15 +242,20 @@ void initializeTransmission(void)
       sei();
     }
     
-        transmission[0] = 0x11; // ID of this Banka(r)
-        transmission[1] = 0; // how many transmissions failed before
-        transmission[2] = _intsOnPinA;
-        transmission[3] = _intsOnPinB;
+    transmission[0] = 0x11; // ID of this Banka(r)
+    transmission[1] = 0; // how many transmissions failed before
+    transmission[2] = _intsOnPinA;
+    transmission[3] = _intsOnPinB;
+    transmission[4] = transmissionNo++;
+    transmission[5] = wdt_overruns;
 }
 
 
 void loop()
 {
+  /*Serial.print("W: ");
+  Serial.println(f_wdt, DEC);
+  Serial.flush();*/
   if (f_wdt == 0) {
     // not a watchdog interrupt!
     // so just put back to sleep
@@ -270,7 +267,7 @@ void loop()
 
     {
        // usefull load here
-      if (transmitNowCounter == 6 /* 8sec * 7times = 56 seconds */ || lastTransmitFailed > 0) {
+      if (lastTransmitFailed > 0 || transmitNowCounter == 6 /* 8sec * 7times = 56 seconds */) {
         putRadioUp();
         //
           if (lastTransmitFailed == 0) {
@@ -280,14 +277,27 @@ void loop()
           }
           wdt_reset();
           bool txSucceeded = radio.write(&transmission, sizeof(transmission));
+          /*Serial.print(" TX: ");
+          Serial.print(txSucceeded, DEC);
+          Serial.print(" LFF: ");
+          Serial.print(lastTransmitFailed, HEX);
+          Serial.print(" TNC: ");
+          Serial.println(transmitNowCounter, HEX);
+          Serial.flush();*/
           wdt_reset();
         //
         putRadioDown();
-        lastTransmitFailed = txSucceeded ? 0 : lastTransmitFailed++;
-        lastTransmitFailed = lastTransmitFailed > 100 ? 1 : lastTransmitFailed; // avoid overload
-        if (lastTransmitFailed == 0) {
-          transmitNowCounter = transmitNowCounter == 6 ? 0 : transmitNowCounter++;
+        if (txSucceeded) {
+          lastTransmitFailed = 0;
+          transmitNowCounter = 0;
+        } else {
+          lastTransmitFailed++;
         }
+        if (lastTransmitFailed > 100) {
+          lastTransmitFailed = 1; // avoid overload
+        }
+      } else {
+        transmitNowCounter++;
       }
     }
     

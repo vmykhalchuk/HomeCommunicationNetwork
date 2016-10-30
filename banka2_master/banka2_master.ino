@@ -70,7 +70,7 @@ boolean setupRadio(void)
   }
   // Set the PA Level low to prevent power supply related issues since this is a
   // getting_started sketch, and the likelihood of close proximity of the devices. RF24_PA_MAX is default.
-  radio.setPALevel(RF24_PA_LOW); // RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH and RF24_PA_MAX
+  radio.setPALevel(RF24_PA_MAX); // RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH and RF24_PA_MAX
   radio.setDataRate(RF24_250KBPS); // (default is RF24_1MBPS)
   radio.setChannel(118); // 2.518 Ghz - Above most Wifi Channels (default is 76)
   radio.setCRCLength(RF24_CRC_16); //(default is RF24_CRC_16)
@@ -78,6 +78,9 @@ boolean setupRadio(void)
   radio.openWritingPipe(addressSlave); // writing to Slave (Banka)
   radio.openReadingPipe(1, addressMaster);
 
+  // Start the radio listening for data
+  radio.startListening();
+  
   return true;
 }
 
@@ -110,30 +113,6 @@ void setup()
     delay(1000);
   }
   
-  /* Setup the pin direction. */
-  pinMode(interruptPinA, INPUT);
-  pinMode(interruptPinB, INPUT);
-
-  if (false)
-  { // don't know how to do it
-    // disable BOD
-    /*sbi(MCUCR,BODS);
-    sbi(MCUCR,BODSE);
-    sbi(MCUCR,BODS);
-    cbi(MCUCR,BODSE);*/
-    // it must be done before actual sleep! see p.45
-    MCUCR |= (1<<BODS) | (1<<BODSE);
-    MCUCR |= (1<<BODS);
-    MCUCR &= ~(1<<BODSE);
-  }
-
-  if (false)
-  { // didn't help at all - still no power reduction in sleep mode
-    // disable ADC
-    ADCSRA = 0;
-    // in order to recover ADC after sleep - write ADCSRA to memory and restore it after wakeup
-  }
-
   setupWdt(true, WDT_PRSCL_8s);
 
   if (!setupRadio()) {
@@ -167,6 +146,21 @@ byte transmission[6];
 
 void loop()
 {
-  
+  while (!radio.available()) {
+  }
+  radio.read( &transmission, sizeof(transmission) );
+  Serial.print(" ID:");
+  Serial.print(transmission[0], HEX);
+  Serial.print(" C:");
+  Serial.print(transmission[4], HEX);
+  Serial.print(" F:");
+  Serial.print(transmission[1], HEX);
+  Serial.print(" Y:");
+  Serial.print(transmission[5], HEX);
+  Serial.print(" A:");
+  Serial.print(transmission[2], HEX);
+  Serial.print(" B:");
+  Serial.print(transmission[3], HEX);
+  Serial.println();
 }
 
