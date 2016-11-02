@@ -9,7 +9,7 @@ const byte zoomerPin = 13;
 
 ISR(WDT_vect)
 {
-  Serial.println("W");
+  Serial.print("W");
 }
 
 inline void enterSleep(void)
@@ -149,6 +149,7 @@ void loop()
   while (!radio.available()) {
   }
   radio.read( &transmission, sizeof(transmission) );
+  Serial.println();
   Serial.print(" ID:");
   Serial.print(transmission[0], HEX);
   Serial.print(" C:");
