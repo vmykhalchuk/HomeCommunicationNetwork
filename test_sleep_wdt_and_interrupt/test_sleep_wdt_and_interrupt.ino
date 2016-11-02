@@ -77,7 +77,8 @@ inline void enterSleepAndAttachInterrupt(void)
 
 inline void enterSleep(void)
 {
-  cli();
+  byte adcsra = ADCSRA;          //save the ADC Control and Status Register A
+  ADCSRA = 0;                    //disable the ADC
   // allowed modes:
   // SLEEP_MODE_IDLE         (0)
   // SLEEP_MODE_ADC          _BV(SM0)
@@ -87,10 +88,17 @@ inline void enterSleep(void)
   // SLEEP_MODE_EXT_STANDBY  (_BV(SM0) | _BV(SM1) | _BV(SM2))
   set_sleep_mode(SLEEP_MODE_PWR_DOWN);
   
+  cli();
   sleep_enable();
+  //disable brown-out detection while sleeping (20-25µA)
+  uint8_t mcucr1 = MCUCR | _BV(BODS) | _BV(BODSE);
+  uint8_t mcucr2 = mcucr1 & ~_BV(BODSE);
+  MCUCR = mcucr1;
+  MCUCR = mcucr2;
   sei(); //after sei we have one clock cycle to execute any command before interrupt will be activated
   sleep_cpu(); /* The program will continue from here. */ // it was : sleep_mode() , seems to be same functionality
   sleep_disable();
+  ADCSRA = adcsra;               //restore ADCSRA
 }
 
 typedef enum { WDT_PRSCL_16ms = 0, WDT_PRSCL_32ms, WDT_PRSCL_64ms, WDT_PRSCL_125ms, 

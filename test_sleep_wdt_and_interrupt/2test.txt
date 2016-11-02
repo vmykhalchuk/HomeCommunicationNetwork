@@ -1,1 +1,3 @@
-Test FALLING scenario
+- Test BOD disabled while sleeping
++ Test FALLING scenario
+	Indeed its not working - it still works as LOW
