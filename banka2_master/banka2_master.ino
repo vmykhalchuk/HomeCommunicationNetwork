@@ -142,7 +142,7 @@ void setup()
   
 }
 
-byte transmission[6];
+byte transmission[7];
 
 void loop()
 {
@@ -162,6 +162,8 @@ void loop()
   Serial.print(transmission[2], HEX);
   Serial.print(" B:");
   Serial.print(transmission[3], HEX);
+  Serial.print(" M:"); // Mag State
+  Serial.print(transmission[6], HEX);
   Serial.println();
 }
 

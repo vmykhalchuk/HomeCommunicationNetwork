@@ -1,0 +1,2 @@
+Notice change in hardware/boards - here I changed extended (? or high) fuses to new value - otherwise it was failing.
+Simply place content of this folder into <user_home>/Documents/Arduino folder to benefit from it.

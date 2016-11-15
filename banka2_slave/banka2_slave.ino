@@ -5,12 +5,19 @@
 #include <SPI.h>
 #include "RF24.h"
 
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_HMC5883_U.h>
+
 const byte zoomerPin = 5; // cannot be 13 since radio is using it!
 
 const byte interruptPinA = 2;
 const byte interruptPinB = 3;
 volatile byte interruptsOnPinA = 0;
 volatile byte interruptsOnPinB = 0;
+
+/* Assign a unique ID to this sensor at the same time */
+Adafruit_HMC5883_Unified mag = Adafruit_HMC5883_Unified(12345);
 
 void pinAInterruptRoutine(void)
 {
@@ -207,6 +214,22 @@ void setup()
     }
   }
 
+  if(!mag.begin())
+  {
+    while(true) {
+      Serial.println("Magnetometer Initialization failed!!!");
+      for (int i = 0; i < 2; i++) {
+        digitalWrite(zoomerPin, HIGH);
+        delay(500);
+        digitalWrite(zoomerPin, LOW);
+        delay(500);
+        wdt_reset();
+      }
+      delay(2000);
+      wdt_reset();
+    }
+  }
+
   Serial.println("Initialization complete.");
   for (int i = 0; i < 5; i++) {
     wdt_reset();
@@ -219,12 +242,14 @@ void setup()
   
 }
 
+byte magState = 0;
+
 byte transmitNowCounter = 0;
 byte lastTransmitFailed = 0;
 
-byte transmission[6];
+byte transmission[7];
 byte transmissionNo = 0;
-void initializeTransmission(void)
+void initializeTransmission()
 {
     byte _intsOnPinA, _intsOnPinB;
     { // read values and attach interrupts back again (in case they were detached due to overflow)
@@ -248,8 +273,109 @@ void initializeTransmission(void)
     transmission[3] = _intsOnPinB;
     transmission[4] = transmissionNo++;
     transmission[5] = wdt_overruns;
+    transmission[6] = magState; magState = 0;
 }
 
+void updateTransmission()
+{
+  if (interruptsOnPinA > transmission[2]) {
+    transmission[2] = interruptsOnPinA;
+  }
+  if (interruptsOnPinB > transmission[3]) {
+    transmission[3] = interruptsOnPinB;
+  }
+  transmission[5] = wdt_overruns;
+  if (magState > transmission[6]) {
+    transmission[6] = magState;
+  }
+}
+
+float data[15][3];
+int head = 0;
+boolean initialized = false;
+
+// 0 - delta is [0-5)
+// 1 - delta is [5-10)
+// 2 - delta is [10-15)
+// 3 - delta is [15-20)
+// 4 - delta is [20-30)
+// 5 - delta is [30-40)
+// 6 - delta is [40-60)
+// 7 - delta is [60-100)
+// 8 - delta is [100-?)
+// 0xFF - not initialized yet
+int getMagSensorState()
+{
+  /* Get a new sensor event */ 
+  sensors_event_t event; 
+  mag.getEvent(&event);
+
+  data[head][0] = event.magnetic.x;
+  data[head][1] = event.magnetic.y;
+  data[head][2] = event.magnetic.z;
+  
+  head++;
+  
+  if (!initialized) {
+    if (head == 15) {
+      initialized = true;
+    }
+  }
+  head = head % 15;
+
+  if (initialized) {
+    // now we can start algorithm
+    float sumXTotal = 0;
+    float sumYTotal = 0;
+    float sumZTotal = 0;
+    float sumXLastThree = 0;
+    float sumYLastThree = 0;
+    float sumZLastThree = 0;
+    int pos = head;
+    for (int i = 0; i < 15; i++) {
+      sumXTotal += data[pos][0];
+      sumYTotal += data[pos][1];
+      sumZTotal += data[pos][2];
+      if (i >= (15-3)) {
+        sumXLastThree += data[pos][0];
+        sumYLastThree += data[pos][1];
+        sumZLastThree += data[pos][2];
+      }
+      pos = (pos + 1) % 15;
+    }
+    sumXTotal /= 15;
+    sumYTotal /= 15;
+    sumZTotal /= 15;
+    sumXLastThree /= 3;
+    sumYLastThree /= 3;
+    sumZLastThree /= 3;
+
+    float deltaX = sumXTotal - sumXLastThree; if (deltaX < 0) deltaX = -deltaX;
+    float deltaY = sumYTotal - sumYLastThree; if (deltaY < 0) deltaY = -deltaY;
+    float deltaZ = sumZTotal - sumZLastThree; if (deltaZ < 0) deltaZ = -deltaZ;
+    float deltaSum = deltaX+deltaY+deltaZ;
+    if (deltaSum < 5) {
+      return 0;
+    } else if (deltaSum < 10) {
+      return 1;
+    } else if (deltaSum < 15) {
+      return 2;
+    } else if (deltaSum < 20) {
+      return 3;
+    } else if (deltaSum < 30) {
+      return 4;
+    } else if (deltaSum < 40) {
+      return 5;
+    } else if (deltaSum < 60) {
+      return 6;
+    } else if (deltaSum < 100) {
+      return 7;
+    } else {
+      return 8;
+    }
+  }
+  return 0xFF;
+}
 
 void loop()
 {
@@ -267,12 +393,18 @@ void loop()
 
     {
        // usefull load here
+      byte _magState = getMagSensorState();
+      if (_magState > magState) {
+        magState = _magState;
+      }
+      
       if (lastTransmitFailed > 0 || transmitNowCounter == 6 /* 8sec * 7times = 56 seconds */) {
         putRadioUp();
         //
           if (lastTransmitFailed == 0) {
             initializeTransmission();
           } else {
+            updateTransmission();
             transmission[1] = lastTransmitFailed; // how many transmissions failed before
           }
           wdt_reset();
@@ -292,9 +424,9 @@ void loop()
           transmitNowCounter = 0;
         } else {
           lastTransmitFailed++;
-        }
-        if (lastTransmitFailed > 100) {
-          lastTransmitFailed = 1; // avoid overload
+          if (lastTransmitFailed > 100) {
+            lastTransmitFailed = 1; // avoid overload
+          }
         }
       } else {
         transmitNowCounter++;
