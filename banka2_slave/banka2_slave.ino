@@ -10,8 +10,8 @@
 #include <Adafruit_HMC5883_U.h>
 
 static const byte BANKA_DEV_ID = 0x11; // ID of this Banka(R)
-static const byte SEND_TRANSMISSION_TRESHOLD = 6; // every tick is every 8 seconds,
-                                                  // then 8*6 = 48 seconds between transmissions
+static const byte SEND_TRANSMISSION_TRESHOLD = 12; // every tick is every 8 seconds,
+                                                  // then 4*12 = 48 seconds between transmissions
 
 const byte zoomerPin = 5; // cannot be 13 since radio is using it!
 
@@ -95,6 +95,16 @@ ISR(WDT_vect)
     Serial.println("WDT Overrun!!!");
     Serial.flush();
   }*/
+  if ((f_wdt > 5) && (f_wdt%10 == 0)) {
+      for (int i = 0; i < 50; i++) {
+        wdt_reset();
+        digitalWrite(zoomerPin, HIGH);
+        delay(300);
+        wdt_reset();
+        digitalWrite(zoomerPin, LOW);
+        delay(300);
+      }
+  }
 }
 
 inline void enterSleepAndAttachInterrupt(void)
@@ -232,11 +242,12 @@ void setup()
     // in order to recover ADC after sleep - write ADCSRA to memory and restore it after wakeup
   }
 
-  setupWdt(true, WDT_PRSCL_8s);
+  setupWdt(true, WDT_PRSCL_4s);
 
   if (!setupRadio()) {
     while(true) {
       Serial.println("Radio Initialization failed!!!");
+      Serial.flush();
       for (int i = 0; i < 3; i++) {
         digitalWrite(zoomerPin, HIGH);
         delay(500);
@@ -252,6 +263,7 @@ void setup()
   mag.begin();
 
   Serial.println("Initialization complete.");
+  Serial.flush();
   for (int i = 0; i < 5; i++) {
     wdt_reset();
     digitalWrite(zoomerPin, HIGH);
@@ -379,7 +391,7 @@ byte getLightSensorState()
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 /// >> transmission area start!
-struct RegsiterNewEventData
+struct RegisterNewEventData
 {
   byte transmissionId = 0;// just running number from 0 to 255 and back to 0
   byte lastFailed = 0;
@@ -436,6 +448,7 @@ void registerNewEvent(byte wdtOverruns,
 
 byte _getTreshold(byte lastFailed)
 {
+  if (lastFailed > 9) lastFailed = 9; // result is 34 when lastFailed=9
   byte v1 = 0, v2 = 1;
   for (int i = 0; i < lastFailed; i++)
   {
@@ -462,6 +475,23 @@ boolean _transmitData()
   transmission[7] = _rneD.portBData;
   bool txSucceeded = radio.write(&transmission, sizeof(transmission));
   wdt_reset();
+  { // notify of send status
+    if (txSucceeded) {
+      digitalWrite(zoomerPin, HIGH);
+      delay(100);
+      digitalWrite(zoomerPin, LOW);
+      wdt_reset();
+    } else {
+      for (int i = 0; i < 10; i++) {
+        wdt_reset();
+        digitalWrite(zoomerPin, HIGH);
+        delay(15);
+        wdt_reset();
+        digitalWrite(zoomerPin, LOW);
+        delay(15);
+      }
+    }
+  }
   putRadioDown();
   return txSucceeded;
 }
@@ -481,15 +511,25 @@ void loop()
     
   } else if (f_wdt == 1) {
     f_wdt=0;
+    
     // this is a watchdog timer interrupt!
     { // useful load here
+      digitalWrite(zoomerPin, HIGH);
+      delay(10);
+      digitalWrite(zoomerPin, LOW);
+      
+      Serial.print("Data"); Serial.flush();
       byte _magState = getMagSensorState();
+      Serial.print(" m="); Serial.print(_magState); Serial.flush();
       wdt_reset();
       byte _lightState = getLightSensorState();
+      Serial.print(" l="); Serial.print(_lightState); Serial.flush();
       wdt_reset();
       byte _intsOnPinA = readInterruptsOnPinA();
+      Serial.print(" a="); Serial.print(_intsOnPinA); Serial.flush();
       wdt_reset();
       byte _intsOnPinB = readInterruptsOnPinB();
+      Serial.print(" b="); Serial.print(_intsOnPinB); Serial.println(); Serial.flush();
       wdt_reset();
       registerNewEvent(wdt_overruns, _magState, _lightState, _intsOnPinA, _intsOnPinB);
     }
