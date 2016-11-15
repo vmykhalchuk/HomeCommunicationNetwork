@@ -142,7 +142,7 @@ void setup()
   
 }
 
-byte transmission[7];
+byte transmission[8];
 
 void loop()
 {
@@ -150,20 +150,14 @@ void loop()
   }
   radio.read( &transmission, sizeof(transmission) );
   Serial.println();
-  Serial.print(" ID:");
-  Serial.print(transmission[0], HEX);
-  Serial.print(" C:");
-  Serial.print(transmission[4], HEX);
-  Serial.print(" F:");
-  Serial.print(transmission[1], HEX);
-  Serial.print(" Y:");
-  Serial.print(transmission[5], HEX);
-  Serial.print(" A:");
-  Serial.print(transmission[2], HEX);
-  Serial.print(" B:");
-  Serial.print(transmission[3], HEX);
-  Serial.print(" M:"); // Mag State
-  Serial.print(transmission[6], HEX);
+  Serial.print(" ID:"); Serial.print(transmission[0], HEX);// Banka(R) ID
+  Serial.print(" C:");  Serial.print(transmission[1], HEX);// Communication No
+  Serial.print(" F:");  Serial.print(transmission[2], HEX);// Failed attempts to deliver this communication
+  Serial.print(" W:");  Serial.print(transmission[3], HEX);// WDT overruns
+  Serial.print(" M:");  Serial.print(transmission[4], HEX);// Mag State
+  Serial.print(" L:");  Serial.print(transmission[5], HEX);// Light State
+  Serial.print(" A:");  Serial.print(transmission[6], HEX);// Port A interrupts
+  Serial.print(" B:");  Serial.print(transmission[7], HEX);// Port B interrupts
   Serial.println();
 }
 

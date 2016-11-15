@@ -9,41 +9,76 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_HMC5883_U.h>
 
+static const byte BANKA_DEV_ID = 0x11; // ID of this Banka(R)
+static const byte SEND_TRANSMISSION_TRESHOLD = 6; // every tick is every 8 seconds,
+                                                  // then 8*6 = 48 seconds between transmissions
+
 const byte zoomerPin = 5; // cannot be 13 since radio is using it!
 
-const byte interruptPinA = 2;
-const byte interruptPinB = 3;
-volatile byte interruptsOnPinA = 0;
-volatile byte interruptsOnPinB = 0;
+const byte INTERRUPT_PIN_A = 2;
+const byte INTERRUPT_PIN_B = 3;
+
+const byte LIGHT_SENSOR_PIN = A3;
 
 /* Assign a unique ID to this sensor at the same time */
 Adafruit_HMC5883_Unified mag = Adafruit_HMC5883_Unified(12345);
 
+
+/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/// >> interrupts routines start
+volatile byte _ints_interruptsOnPinA = 0;
+volatile byte _ints_interruptsOnPinB = 0;
 void pinAInterruptRoutine(void)
 {
-  if (interruptsOnPinA <= 0xD) {
-    interruptsOnPinA++;
+  if (_ints_interruptsOnPinA <= 0xD) {
+    _ints_interruptsOnPinA++;
   } else {
-    interruptsOnPinA = 0xF;
-    detachInterrupt(digitalPinToInterrupt(interruptPinA));
+    _ints_interruptsOnPinA = 0xF;
+    detachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN_A));
   }
 }
 
 void pinBInterruptRoutine(void)
 {
-  if (interruptsOnPinB <= 0xD) {
-    interruptsOnPinB++;
+  if (_ints_interruptsOnPinB <= 0xD) {
+    _ints_interruptsOnPinB++;
   } else {
-    interruptsOnPinB = 0xF;
-    detachInterrupt(digitalPinToInterrupt(interruptPinB));
+    _ints_interruptsOnPinB = 0xF;
+    detachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN_B));
   }
 }
+
+byte readInterruptsOnPinA()
+{
+  cli();
+  byte _intsOnPinA = _ints_interruptsOnPinA;
+  _ints_interruptsOnPinA = 0;
+  attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN_A), pinAInterruptRoutine, LOW);
+  sei();
+  return _intsOnPinA;
+}
+
+byte readInterruptsOnPinB()
+{
+  cli();
+  byte _intsOnPinB = _ints_interruptsOnPinB;
+  _ints_interruptsOnPinB = 0;
+  attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN_B), pinBInterruptRoutine, LOW);
+  sei();
+  return _intsOnPinB;
+}
+/// << interrupts routines end
+/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
 
 volatile byte f_wdt=1;
 volatile byte wdt_overruns = 0;
 ISR(WDT_vect)
 {
-  if (f_wdt == 0)
+  f_wdt++;
+  /*if (f_wdt == 0)
   {
     f_wdt=1;
   }
@@ -59,7 +94,7 @@ ISR(WDT_vect)
     wdt_overruns++;
     Serial.println("WDT Overrun!!!");
     Serial.flush();
-  }
+  }*/
 }
 
 inline void enterSleepAndAttachInterrupt(void)
@@ -69,8 +104,8 @@ inline void enterSleepAndAttachInterrupt(void)
             // digitalPinToInterrupt(2) => 0
             // digitalPinToInterrupt(3) => 1
             // digitalPinToInterrupt(1 | 4) => -1
-  attachInterrupt(digitalPinToInterrupt(interruptPinA), pinAInterruptRoutine, LOW); // can be LOW / CHANGE / HIGH / ... FALLING
-  attachInterrupt(digitalPinToInterrupt(interruptPinB), pinBInterruptRoutine, LOW);
+  attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN_A), pinAInterruptRoutine, LOW); // can be LOW / CHANGE / HIGH / ... FALLING
+  attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN_B), pinBInterruptRoutine, LOW);
 
   enterSleep();
 }
@@ -174,8 +209,8 @@ void setup()
   }
   
   /* Setup the pin direction. */
-  pinMode(interruptPinA, INPUT);
-  pinMode(interruptPinB, INPUT);
+  pinMode(INTERRUPT_PIN_A, INPUT);
+  pinMode(INTERRUPT_PIN_B, INPUT);
 
   if (false)
   { // don't know how to do it
@@ -214,21 +249,7 @@ void setup()
     }
   }
 
-  if(!mag.begin())
-  {
-    while(true) {
-      Serial.println("Magnetometer Initialization failed!!!");
-      for (int i = 0; i < 2; i++) {
-        digitalWrite(zoomerPin, HIGH);
-        delay(500);
-        digitalWrite(zoomerPin, LOW);
-        delay(500);
-        wdt_reset();
-      }
-      delay(2000);
-      wdt_reset();
-    }
-  }
+  mag.begin();
 
   Serial.println("Initialization complete.");
   for (int i = 0; i < 5; i++) {
@@ -242,88 +263,43 @@ void setup()
   
 }
 
-byte magState = 0;
 
-byte transmitNowCounter = 0;
-byte lastTransmitFailed = 0;
-
-byte transmission[7];
-byte transmissionNo = 0;
-void initializeTransmission()
-{
-    byte _intsOnPinA, _intsOnPinB;
-    { // read values and attach interrupts back again (in case they were detached due to overflow)
-      cli();
-      _intsOnPinA = interruptsOnPinA;
-      interruptsOnPinA = 0;
-      _intsOnPinB = interruptsOnPinB;
-      interruptsOnPinB = 0;
-      /* Setup pin2 as an interrupt and attach handler. */
-            // digitalPinToInterrupt(2) => 0
-            // digitalPinToInterrupt(3) => 1
-            // digitalPinToInterrupt(1 | 4) => -1
-      attachInterrupt(digitalPinToInterrupt(interruptPinA), pinAInterruptRoutine, LOW); // can be LOW / CHANGE / HIGH / ...
-      attachInterrupt(digitalPinToInterrupt(interruptPinB), pinBInterruptRoutine, LOW);
-      sei();
-    }
-    
-    transmission[0] = 0x11; // ID of this Banka(r)
-    transmission[1] = 0; // how many transmissions failed before
-    transmission[2] = _intsOnPinA;
-    transmission[3] = _intsOnPinB;
-    transmission[4] = transmissionNo++;
-    transmission[5] = wdt_overruns;
-    transmission[6] = magState; magState = 0;
-}
-
-void updateTransmission()
-{
-  if (interruptsOnPinA > transmission[2]) {
-    transmission[2] = interruptsOnPinA;
-  }
-  if (interruptsOnPinB > transmission[3]) {
-    transmission[3] = interruptsOnPinB;
-  }
-  transmission[5] = wdt_overruns;
-  if (magState > transmission[6]) {
-    transmission[6] = magState;
-  }
-}
-
-float data[15][3];
-int head = 0;
-boolean initialized = false;
-
-// 0 - delta is [0-5)
-// 1 - delta is [5-10)
-// 2 - delta is [10-15)
-// 3 - delta is [15-20)
-// 4 - delta is [20-30)
-// 5 - delta is [30-40)
-// 6 - delta is [40-60)
-// 7 - delta is [60-100)
-// 8 - delta is [100-?)
-// 0xFF - not initialized yet
-int getMagSensorState()
+/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/// >> mag sensor area starts
+float _mss_data[15][3];
+int _mss_head = 0;
+boolean _mss_initialized = false;
+// 1 - delta is [0-5)
+// 2 - delta is [5-10)
+// 3 - delta is [10-15)
+// 4 - delta is [15-20)
+// 5 - delta is [20-30)
+// 6 - delta is [30-40)
+// 7 - delta is [40-60)
+// 8 - delta is [60-100)
+// 9 - delta is [100-?)
+// 0 - not initialized yet
+byte getMagSensorState()
 {
   /* Get a new sensor event */ 
   sensors_event_t event; 
   mag.getEvent(&event);
 
-  data[head][0] = event.magnetic.x;
-  data[head][1] = event.magnetic.y;
-  data[head][2] = event.magnetic.z;
+  _mss_data[_mss_head][0] = event.magnetic.x;
+  _mss_data[_mss_head][1] = event.magnetic.y;
+  _mss_data[_mss_head][2] = event.magnetic.z;
   
-  head++;
+  _mss_head++;
   
-  if (!initialized) {
-    if (head == 15) {
-      initialized = true;
+  if (!_mss_initialized) {
+    if (_mss_head == 15) {
+      _mss_initialized = true;
     }
   }
-  head = head % 15;
+  _mss_head = _mss_head % 15;
 
-  if (initialized) {
+  if (_mss_initialized) {
     // now we can start algorithm
     float sumXTotal = 0;
     float sumYTotal = 0;
@@ -331,15 +307,15 @@ int getMagSensorState()
     float sumXLastThree = 0;
     float sumYLastThree = 0;
     float sumZLastThree = 0;
-    int pos = head;
+    int pos = _mss_head;
     for (int i = 0; i < 15; i++) {
-      sumXTotal += data[pos][0];
-      sumYTotal += data[pos][1];
-      sumZTotal += data[pos][2];
+      sumXTotal += _mss_data[pos][0];
+      sumYTotal += _mss_data[pos][1];
+      sumZTotal += _mss_data[pos][2];
       if (i >= (15-3)) {
-        sumXLastThree += data[pos][0];
-        sumYLastThree += data[pos][1];
-        sumZLastThree += data[pos][2];
+        sumXLastThree += _mss_data[pos][0];
+        sumYLastThree += _mss_data[pos][1];
+        sumZLastThree += _mss_data[pos][2];
       }
       pos = (pos + 1) % 15;
     }
@@ -355,27 +331,143 @@ int getMagSensorState()
     float deltaZ = sumZTotal - sumZLastThree; if (deltaZ < 0) deltaZ = -deltaZ;
     float deltaSum = deltaX+deltaY+deltaZ;
     if (deltaSum < 5) {
-      return 0;
-    } else if (deltaSum < 10) {
       return 1;
-    } else if (deltaSum < 15) {
+    } else if (deltaSum < 10) {
       return 2;
-    } else if (deltaSum < 20) {
+    } else if (deltaSum < 15) {
       return 3;
-    } else if (deltaSum < 30) {
+    } else if (deltaSum < 20) {
       return 4;
-    } else if (deltaSum < 40) {
+    } else if (deltaSum < 30) {
       return 5;
-    } else if (deltaSum < 60) {
+    } else if (deltaSum < 40) {
       return 6;
-    } else if (deltaSum < 100) {
+    } else if (deltaSum < 60) {
       return 7;
-    } else {
+    } else if (deltaSum < 100) {
       return 8;
+    } else {
+      return 9;
     }
   }
-  return 0xFF;
+  return 0x0;
 }
+/// << mag sensor area ends
+/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+
+/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/// >> light sensor area starts
+byte getLightSensorState()
+{
+  int v = analogRead(LIGHT_SENSOR_PIN);
+  for (int i = 0; i < 10; i++) {
+    if (v < 50 + i*100) {
+      return i;
+    }
+  }
+  return 10;
+}
+/// << light sensor area ends
+/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+
+
+/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/// >> transmission area start!
+struct RegsiterNewEventData
+{
+  byte transmissionId = 0;// just running number from 0 to 255 and back to 0
+  byte lastFailed = 0;
+  byte sendTransmissionCounter = 0; // send after given amount of register event calls
+  byte sendTransmissionTreshold = SEND_TRANSMISSION_TRESHOLD;
+
+  byte wdtOverruns = 0;
+  byte magSensorData = 0;
+  byte lightSensorData = 0;
+  byte portAData = 0;
+  byte portBData = 0;
+} _rneD;
+
+void registerNewEvent(byte wdtOverruns, 
+                      byte magSensorData, byte lightSensorData,
+                      byte portAData, byte portBData)
+{
+  // update current values with most recent ones
+  if (wdtOverruns > _rneD.wdtOverruns)
+          _rneD.wdtOverruns = wdtOverruns;
+  if (magSensorData > _rneD.magSensorData) 
+          _rneD.magSensorData = magSensorData;
+  if (lightSensorData > _rneD.lightSensorData) 
+          _rneD.lightSensorData = lightSensorData;
+  if (portAData > _rneD.portAData) 
+          _rneD.portAData = portAData;
+  if (portBData > _rneD.portBData) 
+          _rneD.portBData = portBData;
+
+  if (++_rneD.sendTransmissionCounter >= _rneD.sendTransmissionTreshold)
+  {
+    // send transmission with data in _rneD
+    boolean succeeded = _transmitData();
+    if (succeeded)
+    {
+      _rneD.transmissionId++;
+      _rneD.lastFailed = 0;
+      _rneD.sendTransmissionCounter = 0;
+      _rneD.sendTransmissionTreshold = SEND_TRANSMISSION_TRESHOLD;
+      _rneD.wdtOverruns = 0;
+      _rneD.magSensorData = 0;
+      _rneD.lightSensorData = 0;
+      _rneD.portAData = 0;
+      _rneD.portBData = 0;
+    }
+    else
+    {
+      _rneD.lastFailed++; if (_rneD.lastFailed > 100) _rneD.lastFailed = 100;
+      _rneD.sendTransmissionCounter = 0;
+      _rneD.sendTransmissionTreshold = _getTreshold(_rneD.lastFailed);
+    }
+  }
+}
+
+byte _getTreshold(byte lastFailed)
+{
+  byte v1 = 0, v2 = 1;
+  for (int i = 0; i < lastFailed; i++)
+  {
+    byte s = v1;
+    v1 = v2;
+    v2 = s + v2;
+  }
+  return v1;
+}
+
+boolean _transmitData()
+{
+  putRadioUp();
+  wdt_reset();
+  byte transmission[8];
+  // fill in data from structure
+  transmission[0] = BANKA_DEV_ID;
+  transmission[1] = _rneD.transmissionId;
+  transmission[2] = _rneD.lastFailed;
+  transmission[3] = _rneD.wdtOverruns;
+  transmission[4] = _rneD.magSensorData;
+  transmission[5] = _rneD.lightSensorData;
+  transmission[6] = _rneD.portAData;
+  transmission[7] = _rneD.portBData;
+  bool txSucceeded = radio.write(&transmission, sizeof(transmission));
+  wdt_reset();
+  putRadioDown();
+  return txSucceeded;
+}
+/// << transmission area end!
+/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 void loop()
 {
@@ -383,69 +475,47 @@ void loop()
   Serial.println(f_wdt, DEC);
   Serial.flush();*/
   if (f_wdt == 0) {
-    // not a watchdog interrupt!
+    // not a watchdog interrupt! this is pin interrupt!
     // so just put back to sleep
     enterSleep();
     
   } else if (f_wdt == 1) {
+    f_wdt=0;
     // this is a watchdog timer interrupt!
-
-
-    {
-       // usefull load here
+    { // useful load here
       byte _magState = getMagSensorState();
-      if (_magState > magState) {
-        magState = _magState;
-      }
-      
-      if (lastTransmitFailed > 0 || transmitNowCounter == 6 /* 8sec * 7times = 56 seconds */) {
-        putRadioUp();
-        //
-          if (lastTransmitFailed == 0) {
-            initializeTransmission();
-          } else {
-            updateTransmission();
-            transmission[1] = lastTransmitFailed; // how many transmissions failed before
-          }
-          wdt_reset();
-          bool txSucceeded = radio.write(&transmission, sizeof(transmission));
-          /*Serial.print(" TX: ");
-          Serial.print(txSucceeded, DEC);
-          Serial.print(" LFF: ");
-          Serial.print(lastTransmitFailed, HEX);
-          Serial.print(" TNC: ");
-          Serial.println(transmitNowCounter, HEX);
-          Serial.flush();*/
-          wdt_reset();
-        //
-        putRadioDown();
-        if (txSucceeded) {
-          lastTransmitFailed = 0;
-          transmitNowCounter = 0;
-        } else {
-          lastTransmitFailed++;
-          if (lastTransmitFailed > 100) {
-            lastTransmitFailed = 1; // avoid overload
-          }
-        }
-      } else {
-        transmitNowCounter++;
-      }
+      wdt_reset();
+      byte _lightState = getLightSensorState();
+      wdt_reset();
+      byte _intsOnPinA = readInterruptsOnPinA();
+      wdt_reset();
+      byte _intsOnPinB = readInterruptsOnPinB();
+      wdt_reset();
+      registerNewEvent(wdt_overruns, _magState, _lightState, _intsOnPinA, _intsOnPinB);
     }
     
     wdt_reset();
     // put to sleep as normal
-    f_wdt=0;
     enterSleep();
     
   } else {
     // this happens only when mcu hangs for some reason
+    wdt_overruns++;
     
     cli();
     while(true) {
       Serial.println("Program hanged!");
       Serial.flush();
+      for (int i = 0; i < 50; i++) {
+        wdt_reset();
+        digitalWrite(zoomerPin, HIGH);
+        delay(300);
+        wdt_reset();
+        digitalWrite(zoomerPin, LOW);
+        delay(300);
+      }
     }
+    sei();
   }
 }
 
