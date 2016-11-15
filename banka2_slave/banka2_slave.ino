@@ -1,3 +1,20 @@
+/*
+ * Connect Mag Sensor:
+ * - connect to 5V (not to 3.3V) in to avoid damage - it works even with lower voltage then 3.3, so no problem
+ * - SDA => A4 => pin 27
+ * - SCL => A5 => pin 28
+ * 
+ * Radio module:
+ * - 
+ * 
+ * Light sensor:
+ * - A3 => pin 26 (could be to A0 / pin 23)
+ * 
+ * Digital sensors on interrupt:
+ * - sensor A => D2 => pin 4
+ * - sensor B => D3 => pin 5
+ */
+
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
 #include <avr/power.h>
