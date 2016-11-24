@@ -146,9 +146,10 @@ byte transmission[8];
 
 void loop()
 {
-  while (!radio.available()) {
-  }
-  radio.read( &transmission, sizeof(transmission) );
+  while (!radio.available());
+  radio.readInBackgroundStart(&transmission, sizeof(transmission));
+  while (!radio.readInBackgroundFinished());
+  //radio.read( &transmission, sizeof(transmission) );
   Serial.println();
   Serial.print(" ID:"); Serial.print(transmission[0], HEX);// Banka(R) ID
   Serial.print(" C:");  Serial.print(transmission[1], HEX);// Communication No
