@@ -95,32 +95,19 @@ volatile byte wdt_overruns = 0;
 ISR(WDT_vect)
 {
   f_wdt++;
-  /*if (f_wdt == 0)
-  {
-    f_wdt=1;
-  }
-  else if (f_wdt == 1)
-  {
-    // we run into wdt overrun without processor not responding
-    f_wdt=2;
-  }
-  else
-  {
-    // another overrun, now lets reset mcu
-    // Here we should reset CPU since this is a cause of unexpected behaviour!
-    wdt_overruns++;
-    Serial.println("WDT Overrun!!!");
-    Serial.flush();
-  }*/
+  if (f_wdt>100) f_wdt=6;
   if ((f_wdt > 5) && (f_wdt%10 == 0)) {
-      for (int i = 0; i < 50; i++) {
-        wdt_reset();
-        digitalWrite(zoomerPin, HIGH);
-        delay(300);
-        wdt_reset();
-        digitalWrite(zoomerPin, LOW);
-        delay(300);
-      }
+    for (int i = 0; i < 50; i++) {
+      wdt_reset();
+      digitalWrite(zoomerPin, HIGH);
+      delay(300);
+      wdt_reset();
+      digitalWrite(zoomerPin, LOW);
+      delay(300);
+    }
+    if (f_wdt%20 == 0) {
+      _transmitData(2);
+    }
   }
 }
 
@@ -233,7 +220,7 @@ void putRadioUp()
 void setup()
 {
   Serial.begin(9600);
-  while(!Serial) {}
+  while(!Serial);
 
   pinMode(zoomerPin, OUTPUT);
   for (int i = 0; i < 2; i++) {
@@ -243,29 +230,9 @@ void setup()
     delay(1000);
   }
   
-  /* Setup the pin direction. */
+  /* Setup the pin directions */
   pinMode(INTERRUPT_PIN_A, INPUT);
   pinMode(INTERRUPT_PIN_B, INPUT);
-
-  if (false)
-  { // don't know how to do it
-    // disable BOD
-    /*sbi(MCUCR,BODS);
-    sbi(MCUCR,BODSE);
-    sbi(MCUCR,BODS);
-    cbi(MCUCR,BODSE);*/
-    // it must be done before actual sleep! see p.45
-    MCUCR |= (1<<BODS) | (1<<BODSE);
-    MCUCR |= (1<<BODS);
-    MCUCR &= ~(1<<BODSE);
-  }
-
-  if (false)
-  { // didn't help at all - still no power reduction in sleep mode
-    // disable ADC
-    ADCSRA = 0;
-    // in order to recover ADC after sleep - write ADCSRA to memory and restore it after wakeup
-  }
 
   setupWdt(true, WDT_PRSCL_4s);
 
@@ -304,9 +271,9 @@ void setup()
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 /// >> mag sensor area starts
-float _mss_data[15][3];
-int _mss_head = 0;
-boolean _mss_initialized = false;
+volatile float _mss_data[15][3];
+volatile int _mss_head = 0;
+volatile boolean _mss_initialized = false;
 // 1 - delta is [0-5)
 // 2 - delta is [5-10)
 // 3 - delta is [10-15)
@@ -430,6 +397,8 @@ struct RegisterNewEventData
   byte portBData = 0;
 } _rneD;
 
+volatile bool mcuInit = true;
+
 void registerNewEvent(byte wdtOverruns, 
                       byte magSensorData, byte lightSensorData,
                       byte portAData, byte portBData)
@@ -446,12 +415,14 @@ void registerNewEvent(byte wdtOverruns,
   if (portBData > _rneD.portBData) 
           _rneD.portBData = portBData;
 
-  if (++_rneD.sendTransmissionCounter >= _rneD.sendTransmissionTreshold)
+  if (mcuInit || (++_rneD.sendTransmissionCounter >= _rneD.sendTransmissionTreshold))
   {
     // send transmission with data in _rneD
-    boolean succeeded = _transmitData();
+    boolean succeeded = _transmitData(mcuInit ? 1 : 0);
     if (succeeded)
     {
+      if (mcuInit) mcuInit = false;
+      
       _rneD.transmissionId++;
       _rneD.lastFailed = 0;
       _rneD.sendTransmissionCounter = 0;
@@ -484,20 +455,24 @@ byte _getTreshold(byte lastFailed)
   return v1;
 }
 
-boolean _transmitData()
+// type - 0 - normal transmission
+//        1 - start-up transmission
+//        2 - wdt overrun transmission
+bool _transmitData(byte type)
 {
   putRadioUp();
   wdt_reset();
-  byte transmission[8];
+  byte transmission[9];
   // fill in data from structure
   transmission[0] = BANKA_DEV_ID;
-  transmission[1] = _rneD.transmissionId;
-  transmission[2] = _rneD.lastFailed;
-  transmission[3] = _rneD.wdtOverruns;
-  transmission[4] = _rneD.magSensorData;
-  transmission[5] = _rneD.lightSensorData;
-  transmission[6] = _rneD.portAData;
-  transmission[7] = _rneD.portBData;
+  transmission[1] = type;
+  transmission[2] = _rneD.transmissionId;
+  transmission[3] = _rneD.lastFailed;
+  transmission[4] = _rneD.wdtOverruns;
+  transmission[5] = _rneD.magSensorData;
+  transmission[6] = _rneD.lightSensorData;
+  transmission[7] = _rneD.portAData;
+  transmission[8] = _rneD.portBData;
   bool txSucceeded = radio.write(&transmission, sizeof(transmission));
   wdt_reset();
   { // notify of send status
@@ -520,15 +495,13 @@ boolean _transmitData()
   putRadioDown();
   return txSucceeded;
 }
+
 /// << transmission area end!
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 void loop()
 {
-  /*Serial.print("W: ");
-  Serial.println(f_wdt, DEC);
-  Serial.flush();*/
   if (f_wdt == 0) {
     // not a watchdog interrupt! this is pin interrupt!
     // so just put back to sleep
@@ -543,18 +516,18 @@ void loop()
       delay(10);
       digitalWrite(zoomerPin, LOW);
       
-      Serial.print("Data"); Serial.flush();
+      //Serial.print("Data"); Serial.flush();
       byte _magState = getMagSensorState();
-      Serial.print(" m="); Serial.print(_magState); Serial.flush();
+      //Serial.print(" m="); Serial.print(_magState); Serial.flush();
       wdt_reset();
       byte _lightState = getLightSensorState();
-      Serial.print(" l="); Serial.print(_lightState); Serial.flush();
+      //Serial.print(" l="); Serial.print(_lightState); Serial.flush();
       wdt_reset();
       byte _intsOnPinA = readInterruptsOnPinA();
-      Serial.print(" a="); Serial.print(_intsOnPinA); Serial.flush();
+      //Serial.print(" a="); Serial.print(_intsOnPinA); Serial.flush();
       wdt_reset();
       byte _intsOnPinB = readInterruptsOnPinB();
-      Serial.print(" b="); Serial.print(_intsOnPinB); Serial.println(); Serial.flush();
+      //Serial.print(" b="); Serial.print(_intsOnPinB); Serial.println(); Serial.flush();
       wdt_reset();
       registerNewEvent(wdt_overruns, _magState, _lightState, _intsOnPinA, _intsOnPinB);
     }
@@ -571,6 +544,7 @@ void loop()
     while(true) {
       Serial.println("Program hanged!");
       Serial.flush();
+      _transmitData(3);
       for (int i = 0; i < 50; i++) {
         wdt_reset();
         digitalWrite(zoomerPin, HIGH);

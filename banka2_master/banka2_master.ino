@@ -68,6 +68,8 @@ boolean setupRadio(void)
   {
     return false;
   }
+  radio.stopListening();// stop to avoid reset MCU issues
+  
   // Set the PA Level low to prevent power supply related issues since this is a
   // getting_started sketch, and the likelihood of close proximity of the devices. RF24_PA_MAX is default.
   radio.setPALevel(RF24_PA_MAX); // RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH and RF24_PA_MAX
@@ -78,9 +80,6 @@ boolean setupRadio(void)
   radio.openWritingPipe(addressSlave); // writing to Slave (Banka)
   radio.openReadingPipe(1, addressMaster);
 
-  // Start the radio listening for data
-  radio.startListening();
-  
   return true;
 }
 
@@ -102,6 +101,8 @@ void putRadioUp()
 
 void setup()
 {
+  setupRadio();
+  
   Serial.begin(9600);
   while (!Serial) {}
 
@@ -115,21 +116,6 @@ void setup()
   
   setupWdt(true, WDT_PRSCL_8s);
 
-  if (!setupRadio()) {
-    while(true) {
-      Serial.println("Radio Initialization failed!!!");
-      for (int i = 0; i < 5; i++) {
-        wdt_reset();
-        digitalWrite(zoomerPin, HIGH);
-        delay(300);
-        wdt_reset();
-        digitalWrite(zoomerPin, LOW);
-        delay(300);
-      }
-      delay(2000);
-    }
-  }
-
   Serial.println("Initialization complete.");
   for (int i = 0; i < 5; i++) {
     wdt_reset();
@@ -138,27 +124,31 @@ void setup()
     wdt_reset();
     digitalWrite(zoomerPin, LOW);
     delay(500);
+    delay(2000);
   }
   
+  // Start the radio listening for data
+  radio.startListening();
 }
 
-byte transmission[8];
+byte transmission[9];
 
 void loop()
 {
   while (!radio.available());
-  radio.readInBackgroundStart(&transmission, sizeof(transmission));
-  while (!radio.readInBackgroundFinished());
+  radio.readUnblockedStart(&transmission, sizeof(transmission));
+  while (!radio.readUnblockedFinished());
   //radio.read( &transmission, sizeof(transmission) );
   Serial.println();
   Serial.print(" ID:"); Serial.print(transmission[0], HEX);// Banka(R) ID
-  Serial.print(" C:");  Serial.print(transmission[1], HEX);// Communication No
-  Serial.print(" F:");  Serial.print(transmission[2], HEX);// Failed attempts to deliver this communication
-  Serial.print(" W:");  Serial.print(transmission[3], HEX);// WDT overruns
-  Serial.print(" M:");  Serial.print(transmission[4], HEX);// Mag State
-  Serial.print(" L:");  Serial.print(transmission[5], HEX);// Light State
-  Serial.print(" A:");  Serial.print(transmission[6], HEX);// Port A interrupts
-  Serial.print(" B:");  Serial.print(transmission[7], HEX);// Port B interrupts
+  Serial.print(" T:");  Serial.print(transmission[1], HEX);// 0- normal; 1- startup; 2- wdt overrun transmission
+  Serial.print(" C:");  Serial.print(transmission[2], HEX);// Communication No
+  Serial.print(" F:");  Serial.print(transmission[3], HEX);// Failed attempts to deliver this communication
+  Serial.print(" W:");  Serial.print(transmission[4], HEX);// WDT overruns
+  Serial.print(" M:");  Serial.print(transmission[5], HEX);// Mag State
+  Serial.print(" L:");  Serial.print(transmission[6], HEX);// Light State
+  Serial.print(" A:");  Serial.print(transmission[7], HEX);// Port A interrupts
+  Serial.print(" B:");  Serial.print(transmission[8], HEX);// Port B interrupts
   Serial.println();
 }
 
