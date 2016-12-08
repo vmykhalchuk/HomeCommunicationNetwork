@@ -18,64 +18,32 @@ const byte zoomerPin = 13;
 /* Hardware configuration: Set up nRF24L01 radio on SPI bus (13, ???) plus pins 7 & 8 */
 RF24 radio(7, 8);
 #define BANKA_TRANSMISSION_SIZE 9
-const byte addressMaster[6] = "MBank";
-const byte addressSlave[6] = "1Bank";
 
-WDTHandler wdtHandler;
+volatile byte transmission[BANKA_TRANSMISSION_SIZE];
+volatile bool readingRadioData = false;
 
 SoftwareSerial softSerial(4, 5);
 NullSerial nullSerial;
 
-GSMUtils gsmUtils(&softSerial, &Serial);
-#define LOG Serial
+#define LOG softSerial
+WDTHandler wdtHandler(&transmission[0], &LOG);
+GSMUtils gsmUtils(&Serial, &LOG);
 
 //-=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=-
 
+volatile int wdt_counter = 0;
+
 ISR(WDT_vect) // called once a minute roughly
 {
-  wdtHandler.wdtMinuteEvent();
-}
-
-boolean setupRadio(void)
-{
-  if (!radio.begin())
-  {
-    return false;
+  if (wdt_counter++ > 60) {
+    wdtHandler.wdtMinuteEvent();
+    wdt_counter = 0;
   }
-  radio.stopListening();// stop to avoid reset MCU issues
-
-  // Set the PA Level low to prevent power supply related issues since this is a
-  // getting_started sketch, and the likelihood of close proximity of the devices. RF24_PA_MAX is default.
-  radio.setPALevel(RF24_PA_MAX); // RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH and RF24_PA_MAX
-  radio.setDataRate(RF24_250KBPS); // (default is RF24_1MBPS)
-  radio.setChannel(118); // 2.518 Ghz - Above most Wifi Channels (default is 76)
-  radio.setCRCLength(RF24_CRC_16); //(default is RF24_CRC_16)
-
-  radio.openWritingPipe(addressSlave); // writing to Slave (Banka)
-  radio.openReadingPipe(1, addressMaster);
-
-  return true;
-}
-
-volatile boolean isRadioUp = true;
-void putRadioDown()
-{
-  if (isRadioUp) {
-    radio.powerDown();
-  }
-  isRadioUp = false;
-}
-void putRadioUp()
-{
-  if (!isRadioUp) {
-    radio.powerUp();
-  }
-  isRadioUp = true;
 }
 
 void setup()
 {
-  setupRadio();
+  setupRadio(&radio);
 
   Serial.begin(9600);
   while (!Serial);
@@ -109,9 +77,6 @@ void setup()
 }
 
 
-volatile byte transmission[BANKA_TRANSMISSION_SIZE];
-volatile bool readingRadioData = false;
-
 void processGsmLine_debug()
 {
   byte gsm_rx_buf_size = gsmUtils.getRxBufSize();
@@ -130,7 +95,7 @@ void processGsmLine_debug()
     if (gsm_rx_buf_size > 1)
     {
       LOG.print('-');
-      LOG.print((byte)(*gsmRxBuf + gsm_rx_buf_size - 1), HEX);
+      LOG.print((byte)*(gsmRxBuf + gsm_rx_buf_size - 1), HEX);
     }
   }
   LOG.println('|');
@@ -153,14 +118,13 @@ void processRadioTransmission_debug()
   LOG.flush();
 }
 
-
 void processGsmLine()
 {
   if (gsmUtils.gsmIsLine(&GSM_OK[0], sizeof(GSM_OK))) {
-    LOG.println("OK OK OK!!!!");
+    LOG.println("GSM says: OK");
   }
   if (gsmUtils.gsmIsLineStartsWith(&GSM_CMGS[0], sizeof(GSM_CMGS))) {
-    LOG.println("OK CMGS OK!!!!");
+    LOG.println("GSM says: CMGS");
     LOG.println(); LOG.print("HURA: "); LOG.println(gsmUtils.gsmReadLineInteger(sizeof(GSM_CMGS)));
   }
   processGsmLine_debug();
@@ -177,17 +141,15 @@ void processRadioTransmission()
   }
   wdtHandler.radioTxReceivedForBanka(bankaId);
 
-
-  LOG.print(" ID:"); LOG.print(transmission[0], HEX);// Banka(R) ID
-  LOG.print(" T:");  LOG.print(transmission[1], HEX);// 0- normal; 1- startup; 2- wdt overrun transmission
-  LOG.print(" C:");  LOG.print(transmission[2], HEX);// Communication No
-  LOG.print(" F:");  LOG.print(transmission[3], HEX);// Failed attempts to deliver this communication
-  LOG.print(" W:");  LOG.print(transmission[4], HEX);// WDT overruns
-  LOG.print(" M:");  LOG.print(transmission[5], HEX);// Mag State
-  LOG.print(" L:");  LOG.print(transmission[6], HEX);// Light State
-  LOG.print(" A:");  LOG.print(transmission[7], HEX);// Port A interrupts
-  LOG.print(" B:");  LOG.print(transmission[8], HEX);// Port B interrupts
+  processRadioTransmission_debug();
 }
+
+int notificationMechanismCounter = 0;
+byte notificationState = 0; // 0 - waiting for new one; 1 - sent for processing, ....
+byte devId, magLevel, lightLevel, wdtOverruns;
+bool outOfReach, digSensors, deviceResetFlag, wdtOverrunFlag;
+
+int gsmSendNotificationCounter = 0;
 
 void loop()
 {
@@ -210,6 +172,66 @@ void loop()
     // read transmission from radio - its ready
     processRadioTransmission();
     readingRadioData = false;
+  }
+
+  // notification mechanism loop
+  if (notificationMechanismCounter++ > 40)
+  {
+    notificationMechanismCounter = 0;
+
+    if (notificationState == 0) {
+      for (byte i = 0; i < sizeof(BANKA_IDS); i++)
+      {
+        byte bankaId = BANKA_IDS[i];
+        bool isOutOfReach = wdtHandler.isBankaOutOfReach(bankaId);
+        bool isAlarm = wdtHandler.isBankaAlarm(bankaId);
+        if (wdtHandler.canNotifyAgainWithSms(bankaId) && (isOutOfReach || isAlarm))
+        {
+          if (isAlarm) LOG.println("isAlarm");
+          if (isOutOfReach) LOG.println("isOutOfReach");
+          LOG.flush();
+          
+          devId = bankaId;
+          BankaState* bankaState = wdtHandler.getBankaState(bankaId);
+          magLevel = bankaState->magLevel;
+          lightLevel = bankaState->lightLevel;
+          wdtOverruns = bankaState->wdtOverruns;
+          outOfReach = isOutOfReach;
+          digSensors = bankaState->digSensors;
+          deviceResetFlag = bankaState->deviceResetFlag;
+          wdtOverrunFlag = bankaState->wdtOverrunFlag;
+          
+          wdtHandler.resetBankaState(bankaId); // reset banka state - so new values can be loaded there
+          
+          notificationState = 1;
+          break;
+        }
+      }
+    }
+  }
+
+  // GSM Send notification mechanism
+  if (gsmSendNotificationCounter++ > 50)
+  {
+    gsmSendNotificationCounter = 0;
+    
+    if (notificationState == 1) {
+      // send it now
+      wdtHandler.setSmsNotifyPending(devId);
+      LOG.println("Sending SMS:");
+      LOG.print("ID: "); LOG.print(devId, HEX);
+      LOG.print(", M: "); LOG.print(magLevel);
+      LOG.print(", L: "); LOG.print(lightLevel);
+      LOG.print(", D: "); LOG.print(digSensors ? 'Y' : 'N');
+      LOG.print(", R: "); LOG.print(deviceResetFlag ? 'Y' : 'N');
+      LOG.print(", WO: "); LOG.print(wdtOverrunFlag ? 'Y' : 'N');
+      LOG.print(", OR: "); LOG.print(outOfReach ? 'Y' : 'N');
+      LOG.print(", OV: "); LOG.print(wdtOverruns);
+      LOG.println();
+      LOG.flush();
+
+      notificationState = 0; // ready for next notification to be sent
+    }
   }
 }
 

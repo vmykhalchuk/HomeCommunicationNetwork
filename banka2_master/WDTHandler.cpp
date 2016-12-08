@@ -1,10 +1,25 @@
 #include "Arduino.h"
 #include "WDTHandler.h"
 
-WDTHandler::WDTHandler()
+#define LOG (*logComm)
+
+WDTHandler::WDTHandler(volatile byte* radioTransmissionBuf, Stream* logComm)
 {
+  this->radioTransmissionBuf = radioTransmissionBuf;
+  this->logComm = logComm;
+  
   for (byte i = 0; i < sizeof(BANKA_IDS); i++)
   {
+    resetBankaState(BANKA_IDS[i]);
+  }
+}
+
+void WDTHandler::resetBankaState(byte bankaId)
+{
+  int bankaNo = getBankaNoByBankaId(bankaId);
+  if (bankaNo == -1) return;
+  int i = bankaNo;
+    banka_states[i].alarm = false;
     banka_states[i].outOfReach = MAXIMUM_NO_TRANSMISSION_MINUTES;
     banka_states[i].sendSMSWhenZero = 0; // when event happens - we plan to send SMS now
     
@@ -12,11 +27,14 @@ WDTHandler::WDTHandler()
     banka_states[i].lightLevel = 0;
     banka_states[i].digSensors = false;
     banka_states[i].deviceResetFlag = false;
-  }
+    banka_states[i].wdtOverrunFlag = false;
+
+    banka_states[i].wdtOverruns = 0;
 }
 
 void WDTHandler::wdtMinuteEvent()
 {
+  LOG.print('W');
   for (byte i = 0; i < sizeof(BANKA_IDS); i++)
   {
     if (banka_states[i].outOfReach > 0)
@@ -28,33 +46,87 @@ void WDTHandler::wdtMinuteEvent()
 
 void WDTHandler::radioTxReceivedForBanka(byte bankaId)
 {
-  int bankaIdNo = getBankaIdNoByBankaId(bankaId);
-  if (bankaIdNo == -1) return;
-  banka_states[bankaIdNo].outOfReach = MAXIMUM_NO_TRANSMISSION_MINUTES; // reset presence of BankaId counter
+  int bankaNo = getBankaNoByBankaId(bankaId);
+  if (bankaNo == -1) return;
+  banka_states[bankaNo].outOfReach = MAXIMUM_NO_TRANSMISSION_MINUTES; // reset presence of BankaId counter
+
+  bool alarm = false;
+
+  volatile byte magLevel = *(radioTransmissionBuf+5);
+  if ((magLevel > MAG_LEVEL_TRESHOLD) && (magLevel > banka_states[bankaNo].magLevel))
+    { alarm = true; banka_states[bankaNo].magLevel = magLevel; }
+
+  //volatile byte lightLevel = *(radioTransmissionBuf+6);
+  //if ((lightLevel > LIGHT_LEVEL_TRESHOLD) && (lightLevel > banka_states[bankaNo].lightLevel))
+  //  { alarm = true; banka_states[bankaNo].lightLevel = lightLevel; }
+
+  //volatile bool digSensors = (*(radioTransmissionBuf+7) > 0) || (*(radioTransmissionBuf+8) > 0);
+  //if (digSensors)
+  //  { alarm = true; banka_states[bankaNo].digSensors = true; }
+
+  volatile bool deviceResetFlag = (*(radioTransmissionBuf+1) == 1);
+  if (deviceResetFlag)
+    { alarm = true; banka_states[bankaNo].deviceResetFlag = true; }
+
+  volatile bool wdtOverrunFlag = (*(radioTransmissionBuf+1) == 2);
+  if (wdtOverrunFlag)
+    { alarm = true; banka_states[bankaNo].wdtOverrunFlag = true; }
+
+  banka_states[bankaNo].wdtOverruns = *(radioTransmissionBuf+4);
+
+  LOG.print("A: "); LOG.println(alarm ? 'T' : 'F');
+  if (alarm) banka_states[bankaNo].alarm = true;
 }
 
 bool WDTHandler::isBankaOutOfReach(byte bankaId)
 {
-  int bankaIdNo = getBankaIdNoByBankaId(bankaId);
-  if (bankaIdNo == -1) return true; // for fake ID will always return as out of reach
-  return banka_states[bankaIdNo].outOfReach == 0; // if counter is 0 - then we haven't received TX for this banka for MAXIMUM_NO_TRANSMISSION_MINUTES
+  int bankaNo = getBankaNoByBankaId(bankaId);
+  if (bankaNo == -1) return true; // for fake ID will always return as out of reach
+  return banka_states[bankaNo].outOfReach == 0; // if counter is 0 - then we haven't received TX for this banka for MAXIMUM_NO_TRANSMISSION_MINUTES
 }
 
-int WDTHandler::getBankaIdNoByBankaId(byte bankaId)
+bool WDTHandler::isBankaAlarm(byte bankaId)
 {
-  int bankaIdNo = -1;
+  int bankaNo = getBankaNoByBankaId(bankaId);
+  if (bankaNo == -1) return true; // for fake ID will always return as alarmed!
+  return banka_states[bankaNo].alarm;
+}
+
+bool WDTHandler::canNotifyAgainWithSms(byte bankaId)
+{
+  int bankaNo = getBankaNoByBankaId(bankaId);
+  if (bankaNo == -1) return true; // for fake ID will always return as true, to notify of wrong BankaID
+  return banka_states[bankaNo].sendSMSWhenZero == 0;
+}
+
+void WDTHandler::setSmsNotifyPending(byte bankaId)
+{
+  int bankaNo = getBankaNoByBankaId(bankaId);
+  if (bankaNo == -1) return;
+  banka_states[bankaNo].sendSMSWhenZero == SEND_NEXT_SMS_DELAY_MINUTES;
+}
+
+int WDTHandler::getBankaNoByBankaId(byte bankaId)
+{
+  int bankaNo = -1;
   for (byte i = 0; i < sizeof(BANKA_IDS); i++) {
     if (bankaId == BANKA_IDS[i]) {
-      bankaIdNo = i;
+      bankaNo = i;
       break;
     }
   }
-  return bankaIdNo;
+  return bankaNo;
 }
 
 bool WDTHandler::isBankaIdValid(byte bankaId)
 {
-  return getBankaIdNoByBankaId(bankaId) != -1;
+  return getBankaNoByBankaId(bankaId) != -1;
 }
 
+BankaState* WDTHandler::getBankaState(byte bankaId)
+{
+  int bankaNo = getBankaNoByBankaId(bankaId);
+  if (bankaNo == -1) return NULL;
+  return &banka_states[bankaNo];
+}
 

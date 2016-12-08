@@ -28,7 +28,6 @@ void GSMUtils::_serialEvent()
     z = 0;
     char c = (char)GSMSerial.peek();
     LOG.print('.');
-    Serial.print(',');
     
     if (gsm_rx_buf_line_cr) {
       if (c == LF) {
@@ -40,8 +39,8 @@ void GSMUtils::_serialEvent()
 
     GSMSerial.read();
     if (c == CR) {
-      gsm_rx_buf_full_line = true; // TODO this is workaround
-      //gsm_rx_buf_line_cr = true;
+      //gsm_rx_buf_full_line = true; // TODO this is workaround
+      gsm_rx_buf_line_cr = true;
       break; //continue;
     } else if (c == LF) {
       gsm_rx_buf_full_line = true;
@@ -96,15 +95,15 @@ int GSMUtils::gsmReadLineInteger(int templateSize)
   int res = 0;
   for (byte i = 0; i < (gsm_rx_buf_size-templateSize); i++) {
     char c = gsm_rx_buf[gsm_rx_buf_size-1-i];
-    LOG.print('['); LOG.print(c); LOG.print(']');
+    //LOG.print('['); LOG.print(c); LOG.print('-');
     if (c < '0' || c > '9') {
       return -1;
     }
     byte d = (byte)c - (byte)'0';
-    LOG.print('['); LOG.print(d); LOG.print(']');
+    //LOG.print(d); LOG.print('-');
     int decPow = 1; for (int j = 0; j < i; j++) decPow *= 10;
     res += decPow * d;
-    LOG.print('['); LOG.print(decPow); LOG.print(']');
+    //LOG.print(decPow); LOG.print(']');
   }
   return res;
 }

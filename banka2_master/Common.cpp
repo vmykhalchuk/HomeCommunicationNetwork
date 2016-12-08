@@ -25,6 +25,46 @@ void setupWdt(boolean enableInterrupt, uint8_t prescaler)
   sei();
 }
 
+RF24* radioObj;
+volatile boolean isRadioUp = true;
+
+bool setupRadio(RF24* radio)
+{
+  radioObj = radio;
+  if (!radio->begin())
+  {
+    return false;
+  }
+  radio->stopListening();// stop to avoid reset MCU issues
+
+  // Set the PA Level low to prevent power supply related issues since this is a
+  // getting_started sketch, and the likelihood of close proximity of the devices. RF24_PA_MAX is default.
+  radio->setPALevel(RF24_PA_MAX); // RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH and RF24_PA_MAX
+  radio->setDataRate(RF24_250KBPS); // (default is RF24_1MBPS)
+  radio->setChannel(118); // 2.518 Ghz - Above most Wifi Channels (default is 76)
+  radio->setCRCLength(RF24_CRC_16); //(default is RF24_CRC_16)
+
+  radio->openWritingPipe(addressSlave); // writing to Slave (Banka)
+  radio->openReadingPipe(1, addressMaster);
+
+  return true;
+}
+
+void putRadioDown()
+{
+  if (isRadioUp) {
+    radioObj->powerDown();
+  }
+  isRadioUp = false;
+}
+void putRadioUp()
+{
+  if (!isRadioUp) {
+    radioObj->powerUp();
+  }
+  isRadioUp = true;
+}
+
 //////////////////////////////////////////////
 /// NullSerial
 //////////////////////////////////////////////
@@ -36,6 +76,7 @@ int NullSerial::peek()
 
 size_t NullSerial::write(uint8_t byte)
 {
+  (void)byte;
   return 0;
 }
 
