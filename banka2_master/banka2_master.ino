@@ -18,7 +18,6 @@ const byte zoomerPin = 13;
 /* Hardware configuration: Set up nRF24L01 radio on SPI bus (13, ???) plus pins 7 & 8 */
 RF24 radio(7, 8);
 #define BANKA_TRANSMISSION_SIZE 9
-
 volatile byte transmission[BANKA_TRANSMISSION_SIZE];
 volatile bool readingRadioData = false;
 
@@ -35,7 +34,7 @@ volatile int wdt_counter = 0;
 
 ISR(WDT_vect) // called once a minute roughly
 {
-  if (wdt_counter++ > 60) {
+  if (wdt_counter++ >= 10) {
     wdtHandler.wdtMinuteEvent();
     wdt_counter = 0;
   }
@@ -120,6 +119,8 @@ void processRadioTransmission_debug()
 
 void processGsmLine()
 {
+  processGsmLine_debug();
+  
   if (gsmUtils.gsmIsLine(&GSM_OK[0], sizeof(GSM_OK))) {
     LOG.println("GSM says: OK");
   }
@@ -127,12 +128,13 @@ void processGsmLine()
     LOG.println("GSM says: CMGS");
     LOG.println(); LOG.print("HURA: "); LOG.println(gsmUtils.gsmReadLineInteger(sizeof(GSM_CMGS)));
   }
-  processGsmLine_debug();
 }
 
 
 void processRadioTransmission()
 {
+  processRadioTransmission_debug();
+
   byte bankaId = transmission[0];
   byte txType = transmission[1];
   if (!wdtHandler.isBankaIdValid(bankaId)) {
@@ -140,8 +142,6 @@ void processRadioTransmission()
     return;
   }
   wdtHandler.radioTxReceivedForBanka(bankaId);
-
-  processRadioTransmission_debug();
 }
 
 int notificationMechanismCounter = 0;
@@ -155,7 +155,8 @@ void loop()
 {
   // gsm life loop
   gsmUtils._serialEvent();
-  if (gsmUtils.isRxBufLineReady()) {
+  if (gsmUtils.isRxBufLineReady())
+  {
     // gsm line received - read it and process
     processGsmLine();
     gsmUtils.resetGsmRxBufAfterLineRead();
@@ -179,7 +180,8 @@ void loop()
   {
     notificationMechanismCounter = 0;
 
-    if (notificationState == 0) {
+    if (notificationState == 0)
+    {
       for (byte i = 0; i < sizeof(BANKA_IDS); i++)
       {
         byte bankaId = BANKA_IDS[i];
@@ -202,9 +204,8 @@ void loop()
           wdtOverrunFlag = bankaState->wdtOverrunFlag;
           
           wdtHandler.resetBankaState(bankaId); // reset banka state - so new values can be loaded there
-          
-          notificationState = 1;
-          break;
+          wdtHandler.setSmsNotifyPending(bankaId);
+          notificationState = 1; break;
         }
       }
     }
@@ -215,18 +216,19 @@ void loop()
   {
     gsmSendNotificationCounter = 0;
     
-    if (notificationState == 1) {
+    if (notificationState == 1)
+    {
       // send it now
       wdtHandler.setSmsNotifyPending(devId);
-      LOG.println("Sending SMS:");
-      LOG.print("ID: "); LOG.print(devId, HEX);
-      LOG.print(", M: "); LOG.print(magLevel);
-      LOG.print(", L: "); LOG.print(lightLevel);
-      LOG.print(", D: "); LOG.print(digSensors ? 'Y' : 'N');
-      LOG.print(", R: "); LOG.print(deviceResetFlag ? 'Y' : 'N');
-      LOG.print(", WO: "); LOG.print(wdtOverrunFlag ? 'Y' : 'N');
-      LOG.print(", OR: "); LOG.print(outOfReach ? 'Y' : 'N');
-      LOG.print(", OV: "); LOG.print(wdtOverruns);
+      LOG.print("Sending SMS:");
+      LOG.print("ID: "); LOG.print(devId, HEX); LOG.print(', ');
+      if (magLevel > 0) { LOG.print("MAG: "); LOG.print(magLevel); LOG.print(", "); }
+      if (lightLevel > 0) { LOG.print("LIG: "); LOG.print(lightLevel); LOG.print(", "); }
+      if (digSensors) { LOG.print("AorB, "); }
+      if (deviceResetFlag) { LOG.print("Reset/PowerUp, "); }
+      if (wdtOverrunFlag) { LOG.print("WatchDog!, "); }
+      if (outOfReach) { LOG.print("Missing!, "); }
+      if (wdtOverruns > 0) { LOG.print("OV: "); LOG.print(wdtOverruns); }
       LOG.println();
       LOG.flush();
 
@@ -234,6 +236,4 @@ void loop()
     }
   }
 }
-
-
 

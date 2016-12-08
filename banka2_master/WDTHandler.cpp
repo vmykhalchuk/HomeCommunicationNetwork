@@ -74,7 +74,6 @@ void WDTHandler::radioTxReceivedForBanka(byte bankaId)
 
   banka_states[bankaNo].wdtOverruns = *(radioTransmissionBuf+4);
 
-  LOG.print("A: "); LOG.println(alarm ? 'T' : 'F');
   if (alarm) banka_states[bankaNo].alarm = true;
 }
 
@@ -103,7 +102,7 @@ void WDTHandler::setSmsNotifyPending(byte bankaId)
 {
   int bankaNo = getBankaNoByBankaId(bankaId);
   if (bankaNo == -1) return;
-  banka_states[bankaNo].sendSMSWhenZero == SEND_NEXT_SMS_DELAY_MINUTES;
+  banka_states[bankaNo].sendSMSWhenZero = SEND_NEXT_SMS_DELAY_MINUTES;
 }
 
 int WDTHandler::getBankaNoByBankaId(byte bankaId)
