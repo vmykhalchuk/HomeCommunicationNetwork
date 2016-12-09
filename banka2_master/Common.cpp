@@ -65,31 +65,3 @@ void putRadioUp()
   isRadioUp = true;
 }
 
-//////////////////////////////////////////////
-/// NullSerial
-//////////////////////////////////////////////
-
-int NullSerial::peek()
-{
-  return 0;
-}
-
-size_t NullSerial::write(uint8_t byte)
-{
-  (void)byte;
-  return 0;
-}
-
-int NullSerial::read()
-{
-  return 0;
-}
-int NullSerial::available()
-{
-  return 0;
-}
-    
-void NullSerial::flush()
-{
-}
-

@@ -57,6 +57,13 @@ void GSMUtils::_serialEvent()
   }
 }
 
+void GSMUtils::resetGsmRxChannel()
+{
+  cli();
+  while (GSMSerial.available()) GSMSerial.read();
+  resetGsmRxBufAfterLineRead();
+}
+
 void GSMUtils::resetGsmRxBufAfterLineRead()
 {
   cli();
@@ -65,6 +72,11 @@ void GSMUtils::resetGsmRxBufAfterLineRead()
   gsm_rx_buf_overflow = false;
   gsm_rx_buf_line_cr = false;
   sei();
+}
+
+bool GSMUtils::gsmIsEmptyLine()
+{
+  return gsm_rx_buf_size == 0;
 }
 
 bool GSMUtils::gsmIsLine(const char* templateStr, int templateSize)
