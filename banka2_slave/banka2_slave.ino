@@ -233,7 +233,9 @@ void setup()
   /* Setup the pin directions */
   pinMode(INTERRUPT_PIN_A, INPUT);
   pinMode(INTERRUPT_PIN_B, INPUT);
-
+  pinMode(LIGHT_SENSOR_PIN, INPUT);
+  digitalWrite(LIGHT_SENSOR_PIN, HIGH); // pull it up for light sensor
+  
   setupWdt(true, WDT_PRSCL_4s);
 
   if (!setupRadio()) {
