@@ -1,6 +1,6 @@
 /*
  * Connect Mag Sensor:
- * - connect to 5V (not to 3.3V) in to avoid damage - it works even with lower voltage then 3.3, so no problem
+ * - connect to 5V input (not to 3.3V input) to avoid damage, it has own 3.3v low drain current stabilizer
  * - SDA => A4 => pin 27
  * - SCL => A5 => pin 28
  * 
@@ -8,7 +8,7 @@
  * - 
  * 
  * Light sensor:
- * - A3 => pin 26 (could be to A0 / pin 23)
+ * - A3 => pin 26
  * 
  * Digital sensors on interrupt:
  * - sensor A => D2 => pin 4
@@ -35,7 +35,7 @@ const byte zoomerPin = 5; // cannot be 13 since radio is using it!
 const byte INTERRUPT_PIN_A = 2;
 const byte INTERRUPT_PIN_B = 3;
 
-const byte LIGHT_SENSOR_PIN = A3;
+const byte LIGHT_SENSOR_PIN = A3; // (pin #26 of ATMega328P)
 
 /* Assign a unique ID to this sensor at the same time */
 Adafruit_HMC5883_Unified mag = Adafruit_HMC5883_Unified(12345);

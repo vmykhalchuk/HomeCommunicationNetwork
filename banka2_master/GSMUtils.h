@@ -27,20 +27,21 @@ class GSMUtils
 
     bool isRxBufLineReady();
     byte getRxBufSize();
-    volatile char* getRxBufHeader();
+    char* getRxBufHeader();
     Stream* getGsmComm() {return gsmComm;}
   private:
     Stream* gsmComm;
     Stream* logComm;
-    volatile char gsm_rx_buf[GSM_RX_BUF_SIZE];
-    volatile byte gsm_rx_buf_size;
-    volatile bool gsm_rx_buf_full_line = false;
-    volatile bool gsm_rx_buf_overflow = false;
-    volatile bool gsm_rx_buf_line_cr = false;
+    char gsm_rx_buf[GSM_RX_BUF_SIZE];
+    byte gsm_rx_buf_size;
+    bool gsm_rx_buf_full_line = false;
+    bool gsm_rx_buf_overflow = false;
+    bool gsm_rx_buf_line_cr = false;
 
-    volatile int z = 0;
+    int z = 0;
 
   public:
+    bool gsmIsSMSTypeTextRequest();
     bool gsmIsEmptyLine();
     bool gsmIsLine(const char* templateStr, int templateSize);
     bool gsmIsLineStartsWith(const char* templateStr, int templateSize);

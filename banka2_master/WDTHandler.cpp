@@ -1,12 +1,10 @@
 #include "Arduino.h"
 #include "WDTHandler.h"
 
-#define LOG (*logComm)
-
 WDTHandler::WDTHandler(volatile byte* radioTransmissionBuf, Stream* logComm)
 {
   this->radioTransmissionBuf = radioTransmissionBuf;
-  this->logComm = logComm;
+  this->LOG = logComm;
   
   for (byte i = 0; i < sizeof(BANKA_IDS); i++)
   {
@@ -34,7 +32,7 @@ void WDTHandler::resetBankaState(byte bankaId)
 
 void WDTHandler::wdtMinuteEvent()
 {
-  LOG.print('W');
+  LOG->print('W');
   for (byte i = 0; i < sizeof(BANKA_IDS); i++)
   {
     if (banka_states[i].outOfReach > 0)
@@ -56,9 +54,9 @@ void WDTHandler::radioTxReceivedForBanka(byte bankaId)
   if ((magLevel > MAG_LEVEL_TRESHOLD) && (magLevel > banka_states[bankaNo].magLevel))
     { alarm = true; banka_states[bankaNo].magLevel = magLevel; }
 
-  //volatile byte lightLevel = *(radioTransmissionBuf+6);
-  //if ((lightLevel > LIGHT_LEVEL_TRESHOLD) && (lightLevel > banka_states[bankaNo].lightLevel))
-  //  { alarm = true; banka_states[bankaNo].lightLevel = lightLevel; }
+  volatile byte lightLevel = *(radioTransmissionBuf+6);
+  if ((lightLevel > LIGHT_LEVEL_TRESHOLD) && (lightLevel > banka_states[bankaNo].lightLevel))
+    { alarm = true; banka_states[bankaNo].lightLevel = lightLevel; }
 
   //volatile bool digSensors = (*(radioTransmissionBuf+7) > 0) || (*(radioTransmissionBuf+8) > 0);
   //if (digSensors)

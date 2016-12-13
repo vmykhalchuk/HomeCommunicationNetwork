@@ -74,6 +74,12 @@ void GSMUtils::resetGsmRxBufAfterLineRead()
   sei();
 }
 
+bool GSMUtils::gsmIsSMSTypeTextRequest()
+{
+  if (gsm_rx_buf_size != 2) return false;
+  return (gsm_rx_buf[0] == '>');
+}
+
 bool GSMUtils::gsmIsEmptyLine()
 {
   return gsm_rx_buf_size == 0;
@@ -130,7 +136,7 @@ byte GSMUtils::getRxBufSize()
   return gsm_rx_buf_size;
 }
 
-volatile char* GSMUtils::getRxBufHeader()
+char* GSMUtils::getRxBufHeader()
 {
   return &gsm_rx_buf[0];
 }

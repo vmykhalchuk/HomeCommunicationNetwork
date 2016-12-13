@@ -19,7 +19,7 @@ typedef enum { WDT_PRSCL_16ms = 0, WDT_PRSCL_32ms, WDT_PRSCL_64ms, WDT_PRSCL_125
 
 typedef enum { GSM_LINE_NONE = 0, GSM_LINE_EMPTY, GSM_LINE_SAME_AS_SENT, GSM_LINE_OK, GSM_LINE_OTHER } gsm_line_received ;
 
-typedef enum { GSM_STATE_ZERO = 0, GSM_STATE_ACTIVE, GSM_STATE_REQUESTED_NOTIFICATION, GSM_STATE_1 } gsm_state ;
+typedef enum { GSM_STATE_ZERO = 0, GSM_STATE_INITIALIZING, GSM_STATE_ACTIVE, GSM_STATE_REQUESTED_NOTIFICATION, GSM_STATE_1 } gsm_state ;
 typedef enum { GSM_STARTUP_STATE_ZERO = 0, GSM_STARTUP_STATE_1 } gsm_startup_state ;
 
 void setupWdt(boolean enableInterrupt, uint8_t prescaler);
@@ -31,5 +31,11 @@ bool setupRadio(RF24* radio);
 
 void putRadioDown();
 void putRadioUp();
+
+struct SMSContent
+{
+  volatile byte devId, magLevel, lightLevel, wdtOverruns;
+  volatile bool outOfReach, digSensors, deviceResetFlag, wdtOverrunFlag;
+};
 
 #endif

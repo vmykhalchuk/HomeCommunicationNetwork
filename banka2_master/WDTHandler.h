@@ -2,13 +2,14 @@
 #define WDTHanlder_h
 
 #include "Arduino.h"
+#include <Stream.h>
 
 const byte BANKA_IDS[] = { 0x11, 0x12, 0x21 };
 #define SEND_NEXT_SMS_DELAY_MINUTES 20
 #define MAXIMUM_NO_TRANSMISSION_MINUTES 10
 
 #define MAG_LEVEL_TRESHOLD 3
-#define LIGHT_LEVEL_TRESHOLD 3
+#define LIGHT_LEVEL_TRESHOLD 2
 
 struct BankaState
 {
@@ -44,9 +45,9 @@ class WDTHandler
     void resetBankaState(byte bankaId);// call it to reset, do it only when banka is being processed!
     BankaState* getBankaState(byte bankaId);
   private:
-    Stream* logComm;
+    Stream* LOG;
     volatile byte* radioTransmissionBuf;
-    volatile BankaState banka_states[sizeof(BANKA_IDS)];
+    BankaState banka_states[sizeof(BANKA_IDS)];
 };
 
 #endif
