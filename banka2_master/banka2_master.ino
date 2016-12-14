@@ -20,7 +20,6 @@ const byte gsmModuleResetPin = 5;
 RF24 radio(7, 8);
 #define BANKA_TRANSMISSION_SIZE 9
 volatile byte transmission[BANKA_TRANSMISSION_SIZE];
-volatile bool readingRadioData = false;
 
 SoftwareSerial softSerial(4, 3);
 NullSerial nullSerial;
@@ -29,7 +28,7 @@ NullSerial nullSerial;
 #define DEBUG LOG // might be nullSerial to remove debug logs
 GSMUtils gsmUtils(&softSerial, &LOG);
 WDTHandler wdtHandler(&transmission[0], &LOG);
-GSMInitializeProcessor gsmInitializeProcessor(&gsmUtils, &LOG);
+GSMInitializeProcessor gsmInitializeProcessor(gsmModuleResetPin, &gsmUtils, &LOG);
 GSMSendSMSProcessor sendSMSProcessor(&gsmUtils, &LOG);
 
 //-=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=-
@@ -46,11 +45,6 @@ volatile byte gsmState = GSM_STATE_ZERO;
 SMSContent _smsContent;
 
 volatile int gsmSendNotificationCounter = 0;
-
-char gsm_sendCharBuf[250];
-byte gsm_sendCharBuf_size = 0;
-volatile byte gsmLineReceived = GSM_LINE_NONE; // see gsm_line_received enum (Common.h)
-volatile bool gsmLineReceivedOverflow = false;
 
 
 //-=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=-
@@ -73,7 +67,7 @@ void setup()
 {
   setupRadio(&radio);
 
-  Serial.begin(9600);
+  Serial.begin(57600);
   while (!Serial);
   softSerial.begin(9600);
 
@@ -88,7 +82,7 @@ void setup()
 
   setupWdt(true, WDT_PRSCL_1s);
 
-  LOG.println("Initialization complete.");
+  LOG.println(F("Initialization complete."));
   for (int i = 0; i < 5; i++) {
     wdt_reset();
     digitalWrite(zoomerPin, HIGH);
@@ -113,21 +107,23 @@ void processGsmLine_debug()
 
   DEBUG.println();
   DEBUG.print(" GSM:");
-  DEBUG.print(gsm_rx_buf_size);
+  //DEBUG.print(gsm_rx_buf_size);
   if (gsm_rx_buf_size > 0) {
     DEBUG.print('|');
     for (byte i = 0; i < gsm_rx_buf_size; i++) {
       DEBUG.print(*(gsmRxBuf + i));
     }
     DEBUG.print('|');
-    DEBUG.print((byte)(*gsmRxBuf), HEX);
-    if (gsm_rx_buf_size > 1)
-    {
-      DEBUG.print('-');
-      DEBUG.print((byte)*(gsmRxBuf + gsm_rx_buf_size - 1), HEX);
-    }
+    
+    //DEBUG.print((byte)(*gsmRxBuf), HEX);
+    //if (gsm_rx_buf_size > 1)
+    //{
+    //  DEBUG.print('-');
+    //  DEBUG.print((byte)*(gsmRxBuf + gsm_rx_buf_size - 1), HEX);
+    //}
+    //DEBUG.print('|');
   }
-  DEBUG.println('|');
+  DEBUG.println();
   DEBUG.flush();
 }
 
@@ -160,13 +156,14 @@ void processRadioTransmission()
   processRadioTransmission_debug();
 
   if (!wdtHandler.isBankaIdValid(bankaId)) {
-    LOG.print("Unknown BankaR ID: "); LOG.println(bankaId, HEX);
+    LOG.print(F("Unknown BankaR ID: ")); LOG.println(bankaId, HEX);
     return;
   }
   wdtHandler.radioTxReceivedForBanka(bankaId);
 }
 
 
+volatile bool readingRadioData = false;
 void loop()
 {
   // gsm life loop
@@ -201,10 +198,15 @@ void loop()
       for (byte i = 0; i < sizeof(BANKA_IDS); i++)
       {
         byte bankaId = BANKA_IDS[i];
+        bool canNotifyAgain = wdtHandler.canNotifyAgainWithSms(bankaId);
         bool isOutOfReach = wdtHandler.isBankaOutOfReach(bankaId);
         bool isAlarm = wdtHandler.isBankaAlarm(bankaId);
-        if (wdtHandler.canNotifyAgainWithSms(bankaId) && (isOutOfReach || isAlarm))
+        if (canNotifyAgain && (isOutOfReach || isAlarm))
         {
+          //DEBUG.print(F("NOTIF: Can notify again: ")); DEBUG.print(canNotifyAgain);
+          //DEBUG.print(F("; isOutOfReach: ")); DEBUG.print(isOutOfReach);
+          //DEBUG.print(F("; isAlarm: ")); DEBUG.print(isAlarm);
+          //DEBUG.println(); DEBUG.flush();
           _smsContent.devId = bankaId;
           BankaState* bankaState = wdtHandler.getBankaState(bankaId);
           _smsContent.magLevel = bankaState->magLevel;
@@ -228,220 +230,131 @@ void loop()
     gsmSendNotificationCounter = 0;
 
     processGsmState();
-    processGsmStartupState();
   }
 }
 
 void processGsmState()
 {
-    // 0 - GSM_STATE_ZERO; MCU started
-    // 1 - GSM_STATE_ACTIVE; ready to process notification
-    // 2 - GSM_STATE_REQUESTED_NOTIFICATION; processing notification
-    // 3 - 
+    // GSM_STATE_ZERO; MCU started
+    // GSM_STATE_INITIALIZING; initializing GSM module
+    // GSM_STATE_ACTIVE; ready to process notification
+    // GSM_STATE_REQUESTED_NOTIFICATION; processing notification
 
     if (gsmState == GSM_STATE_ZERO)
     {
       // start reset sequence
-      gsmStartupState = GSM_STARTUP_STATE_ZERO;
-      gsmState = GSM_STATE_INITIALIZING;
+      if (!gsmInitializeProcessor.startGSMInitialization())
+      {
+        LOG.println(F("Cannot start GSM initialization!")); LOG.flush();
+        delay(20000);
+      }
+      else
+      {
+        gsmState = GSM_STATE_INITIALIZING;
+      }
     }
-    else if (gsmState == GSM_STATE_INITIALIZING || gsmState == GSM_STATE_ACTIVE)
+    else if (gsmState == GSM_STATE_INITIALIZING)
     {
-      // do nothing
+      GSMInitializeProcessor::State s = gsmInitializeProcessor.processState();
+      if (s == GSMInitializeProcessor::State::SUCCESS)
+      {
+        DEBUG.println("GSM: switching to ACTIVE STATE");
+        gsmState = GSM_STATE_ACTIVE;
+      }
+      else if (s == GSMInitializeProcessor::State::ERROR)
+      {
+        LOG.println(F("Error happened during GSM initialization!")); LOG.flush();
+        delay(20000);
+        gsmState = GSM_STATE_ZERO;
+      }
+    }
+    else if (gsmState == GSM_STATE_ACTIVE)
+    {
+      // wait for Notification
     }
     else if (gsmState == GSM_STATE_REQUESTED_NOTIFICATION)
     {
       // send SMS now
       logSendingSms();
-      gsmState = 13;
+      gsmState = 11;
     }
-    else if (gsmState == 13)
+    else if (gsmState == 11)
     {
       if (!sendSMSProcessor.sendSMS(0, &_smsContent))
       {
-        LOG.println("ERROR Sending SMS!"); LOG.flush();
+        LOG.println(F("ERROR Sending SMS!")); LOG.flush();
         gsmState = GSM_STATE_ZERO; // reset GSM //// FIXME This will also render Notification as obsollette and will never send it again!
       }
       else
       {
-        gsmState = 14;
+        gsmState = 12;
       }
     }
-    else if (gsmState == 14)
+    else if (gsmState == 12)
     {
       // wait for sendSMSProcessor to finish and check results
-      GSMSendSMSProcessorState s = sendSMSProcessor.processState();
-      if (s == GSMSendSMSProcessorState::OK)
+      GSMSendSMSProcessor::State s = sendSMSProcessor.processState();
+      if (s == GSMSendSMSProcessor::State::SUCCESS)
       {
-        gsmState = 15;
+        gsmState = 13;
       }
-      else if (s == GSMSendSMSProcessorState::ERROR)
+      else if (s == GSMSendSMSProcessor::State::ERROR)
       {
         gsmState = GSM_STATE_ZERO; // reset GSM //// FIXME This will also render Notification as obsollette and will never send it again!
       }
     }
-    else if (gsmState == 15)
+    else if (gsmState == 13)
     {
       wdtHandler.setSmsNotifyPending(_smsContent.devId); // reset counter - so we do not send new sms again in short interval
       gsmState = GSM_STATE_ACTIVE; // ready for next notification to be processed
     }
 }
 
-void processGsmStartupState()
-{
-    // Fx - GSM is on duty or in error state, nothing to be done by this processor
-    //    FF - is active and on duty
-    //    FE - error starting up
-    // 0 - MCU started
-    // 1 - reset command dispatched
-    // 2 - AT was sent, waiting for response
-    // 6 - SMS ready received, ready to work
-
-    if ((gsmStartupState & 0xF0) > 0)
-    {
-      // do nothing here, we are active and on duty
-    }
-    else if (gsmStartupState == GSM_STARTUP_STATE_ZERO)
-    {// 0. MCU started
-      DEBUG.println("gsmStartupState[0]"); DEBUG.flush();
-      digitalWrite(gsmModuleResetPin, LOW);
-      gsmWdtTimer = 5 /*5sec*/; gsmStartupState = 1;
-    }
-    else if (gsmStartupState == 1)
-    {// 1. reset pin dispatched
-      if (gsmWdtTimer == 0)
-      {
-        DEBUG.println("gsmStartupState[1]"); DEBUG.flush();
-        digitalWrite(gsmModuleResetPin, HIGH);
-        gsmWdtTimer = 6 /*6sec*/; gsmStartupState = 2; // <<< HOTFIX instead of calibrating this timeout, we better make few attempts to send "AT"
-      }
-    }
-    else if (gsmStartupState == 2)
-    {// 2. reset delay finished
-      if (gsmWdtTimer == 0)
-      {
-        DEBUG.println("gsmStartupState[2]"); DEBUG.flush();
-        processGsmLine_reset();
-        gsm_sendCharBuf[0] = 'A'; gsm_sendCharBuf[1] = 'T'; gsm_sendCharBuf_size=2;
-        gsmUtils.getGsmComm()->println("AT"); gsmUtils.getGsmComm()->flush();
-        gsmWdtTimer = GSM_NO_RESPONSE_SECONDS; gsmStartupState = 3;
-      }
-    }
-    else
-    {
-      bool rewindTimer = false;
-      if (gsmWdtTimer == 0) // timedout, need to reset GSM
-        { gsmStartupState = GSM_STARTUP_STATE_ZERO; LOG.println("ERROR: GSM No response!"); }
-
-
-      if (gsmStartupState == 3)
-      {// 3. AT command sent, echo received
-        if (gsmLineReceived == GSM_LINE_SAME_AS_SENT)
-          { 
-            gsm_sendCharBuf_size = 0;
-            rewindTimer = true; gsmStartupState = 4;
-          }
-      }
-      else if (gsmStartupState == 4)
-      {// 4. OK response received
-        if (gsmLineReceived == GSM_LINE_OK)
-          {rewindTimer = true; gsmStartupState = 5; }
-      }
-      else if (gsmStartupState == 5)
-      {//5. some init lines received from GSM module, waiting for "SMS Ready" line to say that module is ready
-        if (gsmLineReceived == GSM_LINE_NONE)
-        {
-          rewindTimer = false;// do not rewindTimer because it might be corrupted communication
-        }
-        else if (gsmLineReceived == GSM_LINE_OTHER)
-        {
-          if (gsmUtils.gsmIsLine(&GSM_CPIN_READY[0], sizeof(GSM_CPIN_READY)) || gsmUtils.gsmIsLine(&GSM_CALL_READY[0], sizeof(GSM_CALL_READY)))
-          {
-            rewindTimer = true;
-          }
-          else if (gsmUtils.gsmIsLine(&GSM_SMS_READY[0], sizeof(GSM_SMS_READY)))
-          { //SMS ready received, GSM module is ready to action!
-            rewindTimer = true; gsmStartupState = 0xFF; gsmState = GSM_STATE_ACTIVE; // HERE We finally make GSM Ready to receive notifications!
-            DEBUG.println("GSM MODULE ACTIVE!");
-          }
-          else
-          {
-            rewindTimer = false;// do not rewindTimer because it might be corrupted communication
-            LOG.println("ERROR: GSM strange line received");
-          }
-        }
-        else
-        {
-          DEBUG.print("gsmStartupState == 5 : Wrong gsmLineReceived:"); DEBUG.println(gsmLineReceived); DEBUG.flush();
-        }
-
-        if (rewindTimer) gsmWdtTimer = GSM_NO_RESPONSE_SECONDS;
-      }
-      else
-      {
-        DEBUG.print("Wrong gsmStartupState:"); DEBUG.println(gsmStartupState); DEBUG.flush();
-        gsmStartupState = GSM_STARTUP_STATE_ZERO; // reseting GSM module
-      }
-    }
-}
-
-void processGsmLine_reset()
-{
-  gsmUtils.resetGsmRxChannel();
-  gsmLineReceived = GSM_LINE_NONE;
-  gsmLineReceivedOverflow = false;
-}
-
 void processGsmLine()
 {
+  volatile byte gsmLineReceived; // see gsm_line_received enum (Common.h)
+  
   processGsmLine_debug();
-
-  // 0 - none, 1 - same line as was written, 2 - OK, 3 - something else
-  if (gsmLineReceived != GSM_LINE_NONE)
-  {
-    gsmLineReceivedOverflow = true;
-    LOG.println("GSM: Overflow!"); // do not flush, this is sensitive code LOG.flush();
-  }
 
   if (gsmUtils.gsmIsEmptyLine())
   {
-    //gsmLineReceived = GSM_LINE_EMPTY; << this is workaround, normally we do not expect any empty lines
+    gsmLineReceived = GSM_LINE_EMPTY;
   }
-  else if (gsmUtils.gsmIsLine(&gsm_sendCharBuf[0], gsm_sendCharBuf_size))
+  else if (gsmUtils.gsmIsLine(&(gsmUtils.gsm_sendCharBuf[0]), gsmUtils.gsm_sendCharBuf_size))
   {
     gsmLineReceived = GSM_LINE_SAME_AS_SENT; // Echo from GSM module
-    DEBUG.println("GSM says: <ECHO>"); DEBUG.flush();
+    DEBUG.println(F("GSM says: <ECHO>")); DEBUG.flush();
   }
   else if (gsmUtils.gsmIsLine(&GSM_OK[0], sizeof(GSM_OK))) {
     gsmLineReceived = GSM_LINE_OK;
-    DEBUG.println("GSM says: OK"); DEBUG.flush();
+    DEBUG.println(F("GSM says: OK")); DEBUG.flush();
   }
   else
   {
     gsmLineReceived = GSM_LINE_OTHER;
   }
-  /*if (gsmUtils.gsmIsLineStartsWith(&GSM_CMGS[0], sizeof(GSM_CMGS))) {
-    DEBUG.println("GSM says: CMGS");
-    DEBUG.println(); DEBUG.print("HURA: "); DEBUG.println(gsmUtils.gsmReadLineInteger(sizeof(GSM_CMGS))); DEBUG.flush();
-  }*/
-  processGsmState();
-  processGsmStartupState();
-  sendSMSProcessor.gsmLineReceivedHandler(gsmLineReceived, gsmUtils.getRxBufHeader(), gsmUtils.getRxBufSize());
-  gsmInitializeProcessor.gsmLineReceivedHandler(gsmLineReceived, gsmUtils.getRxBufHeader(), gsmUtils.getRxBufSize());
-  gsmLineReceived = GSM_LINE_NONE;
+
+  if (gsmLineReceived != GSM_LINE_EMPTY)
+  {
+    sendSMSProcessor.gsmLineReceivedHandler(gsmLineReceived, gsmUtils.getRxBufHeader(), gsmUtils.getRxBufSize());
+    gsmInitializeProcessor.gsmLineReceivedHandler(gsmLineReceived, gsmUtils.getRxBufHeader(), gsmUtils.getRxBufSize());
+  }
+
+  // clean received line state after all handlers have finished
+  if (gsmLineReceived == GSM_LINE_SAME_AS_SENT) gsmUtils.gsm_sendCharBuf_size = 0; // reset this, so we do not receive same line as echo!
 }
 
 void logSendingSms()
 {
-      DEBUG.print("Sending SMS: ");
-      DEBUG.print("ID: "); DEBUG.print(_smsContent.devId, HEX); DEBUG.print(", ");
-      if (_smsContent.magLevel > 0) { DEBUG.print("MAG: "); DEBUG.print(_smsContent.magLevel); DEBUG.print(", "); }
-      if (_smsContent.lightLevel > 0) { DEBUG.print("LIG: "); DEBUG.print(_smsContent.lightLevel); DEBUG.print(", "); }
-      if (_smsContent.digSensors) { DEBUG.print("AorB, "); }
-      if (_smsContent.deviceResetFlag) { DEBUG.print("Reset/PowerUp, "); }
-      if (_smsContent.wdtOverrunFlag) { DEBUG.print("WatchDog!, "); }
-      if (_smsContent.outOfReach) { DEBUG.print("Missing!, "); }
-      if (_smsContent.wdtOverruns > 0) { DEBUG.print("OV: "); DEBUG.print(_smsContent.wdtOverruns); }
+      DEBUG.print(F("Sending SMS: "));
+      DEBUG.print(F("ID: ")); DEBUG.print(_smsContent.devId, HEX); DEBUG.print(F(", "));
+      if (_smsContent.magLevel > 0) { DEBUG.print(F("MAG: ")); DEBUG.print(_smsContent.magLevel); DEBUG.print(F(", ")); }
+      if (_smsContent.lightLevel > 0) { DEBUG.print(F("LIG: ")); DEBUG.print(_smsContent.lightLevel); DEBUG.print(F(", ")); }
+      if (_smsContent.digSensors) { DEBUG.print(F("AorB, ")); }
+      if (_smsContent.deviceResetFlag) { DEBUG.print(F("Reset/PowerUp, ")); }
+      if (_smsContent.wdtOverrunFlag) { DEBUG.print(F("WatchDog!, ")); }
+      if (_smsContent.outOfReach) { DEBUG.print(F("Missing!, ")); }
+      if (_smsContent.wdtOverruns > 0) { DEBUG.print(F("OV: ")); DEBUG.print(_smsContent.wdtOverruns); }
       DEBUG.println();
       DEBUG.flush();
 }

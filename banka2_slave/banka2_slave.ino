@@ -15,6 +15,18 @@
  * - sensor B => D3 => pin 5
  */
 
+/**
+ * Board ID 0x11 pinout:
+ * 
+ *  | GND blue  <=> GND |TTL
+ * B| RXD red   <=> TXD |RS-232
+ * O| TXD brown <=> RXD |(USB)
+ * A|
+ * R| GND brown <=> "-" buzzer
+ * D|  D5 red   <=> "+" buzzer
+ *  |
+ */
+
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
 #include <avr/power.h>
@@ -368,7 +380,7 @@ byte getMagSensorState()
 /// >> light sensor area starts
 byte getLightSensorState()
 {
-  int v = analogRead(LIGHT_SENSOR_PIN);
+  int v = 1023 - analogRead(LIGHT_SENSOR_PIN);
   for (int i = 0; i < 10; i++) {
     if (v < 50 + i*100) {
       return i;

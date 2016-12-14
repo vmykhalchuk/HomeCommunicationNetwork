@@ -15,8 +15,6 @@ const char GSM_CPIN_READY[] = {'+','C','P','I','N',':',' ','R','E','A','D','Y'};
 const char GSM_CALL_READY[] = {'C','a','l','l',' ','R','e','a','d','y'};
 const char GSM_SMS_READY[] = {'S','M','S',' ','R','e','a','d','y'};
 
-const char GSM_CMGS[] = {'+','C','M','G','S',':',' '};
-
 class GSMUtils
 {
   public:
@@ -41,6 +39,8 @@ class GSMUtils
     int z = 0;
 
   public:
+    char gsm_sendCharBuf[250];
+    byte gsm_sendCharBuf_size = 0;
     bool gsmIsSMSTypeTextRequest();
     bool gsmIsEmptyLine();
     bool gsmIsLine(const char* templateStr, int templateSize);

@@ -15,7 +15,7 @@ class GSMAbstractProcessor
     bool _timerActive = false;//if active and reaches 0 - it will time-out GSM as unreachable!
     
   protected:
-    byte const SEND_SMS_GSM_NO_RESPONSE_SECONDS = 120;
+    byte const GSM_NO_RESPONSE_TIMEOUT_SECONDS = 120;
     void _setTimer(int seconds);
     void _deactivateTimer();
     

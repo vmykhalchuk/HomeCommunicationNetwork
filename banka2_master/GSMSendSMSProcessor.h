@@ -7,11 +7,11 @@
 #include "Common.h"
 #include "GSMUtils.h"
 
-enum GSMSendSMSProcessorState { ZERO = 0, S1, S2, S3, S4, WAIT_FOR_TEXT_OF_SMS_REQUEST, SEND_TEXT_OF_SMS, WAIT_FOR_OK_AFTER_SENDING_SMS, OK, ERROR };
-
 class GSMSendSMSProcessor : public GSMAbstractProcessor
 {
   public:
+    enum State { ZERO = 0, S1, S2, S3, S4, WAIT_FOR_TEXT_OF_SMS_REQUEST, SEND_TEXT_OF_SMS, WAIT_FOR_OK_AFTER_SENDING_SMS, SUCCESS, ERROR };
+    
     GSMSendSMSProcessor(GSMUtils* gsmUtils, Stream* logComm);
 
     /**
@@ -19,7 +19,7 @@ class GSMSendSMSProcessor : public GSMAbstractProcessor
      */
     bool sendSMS(byte senderNo, SMSContent* _smsContent);
 
-    GSMSendSMSProcessorState processState(); // should be called as often as possible, takes minimum time to run (simulation of multithreading)
+    State processState(); // should be called as often as possible, takes minimum time to run (simulation of multithreading)
     
     /**
      * gsmLineReceived - type of line received (see Common.h # gsm_line_received)
@@ -30,7 +30,7 @@ class GSMSendSMSProcessor : public GSMAbstractProcessor
   private:
     GSMUtils* gsmUtils;
     Stream* LOG;
-    GSMSendSMSProcessorState _state = GSMSendSMSProcessorState::ZERO;
+    State _state = State::ZERO;
 
     void _timerHandler();
 

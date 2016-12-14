@@ -9,38 +9,38 @@ GSMSendSMSProcessor::GSMSendSMSProcessor(GSMUtils* gsmUtils, Stream* logComm)
 
 bool GSMSendSMSProcessor::sendSMS(byte senderNo, SMSContent* _smsContent)
 {
-  if (_state != GSMSendSMSProcessorState::ZERO && _state != GSMSendSMSProcessorState::ERROR && _state != GSMSendSMSProcessorState::OK)
+  if (_state != State::ZERO && _state != State::ERROR && _state != State::SUCCESS)
   {
     return false;
   }
   this->senderNo = senderNo;
   this->_smsContent = _smsContent;
-  _state = GSMSendSMSProcessorState::S1;
+  _state = State::S1;
   return true;
 }
 
-GSMSendSMSProcessorState GSMSendSMSProcessor::processState()
+GSMSendSMSProcessor::State GSMSendSMSProcessor::processState()
 {
-  if (_state == GSMSendSMSProcessorState::S1)
+  if (_state == State::S1)
   {
     // send "+AT+CMGF=1" to modem
     gsmUtils->getGsmComm()->println("+AT+CMGF=1");
     gsmUtils->getGsmComm()->flush();
-    _state = GSMSendSMSProcessorState::S2;
-    _setTimer(SEND_SMS_GSM_NO_RESPONSE_SECONDS);
+    _state = State::S2;
+    _setTimer(GSM_NO_RESPONSE_TIMEOUT_SECONDS);
   }
-  else if (_state == GSMSendSMSProcessorState::S2)
+  else if (_state == State::S2)
   {
     // waiting for response from GSM module
   }
-  else if (_state == GSMSendSMSProcessorState::S3)
+  else if (_state == State::S3)
   {
     // received confirmation (OK) from GSM module
     gsmUtils->getGsmComm()->print("AT+CMGS=\"");
     gsmUtils->getGsmComm()->flush();
-    _state = GSMSendSMSProcessorState::S4;
+    _state = State::S4;
   }
-  else if (_state == GSMSendSMSProcessorState::S4)
+  else if (_state == State::S4)
   { // write phone number
     if (senderNo == 0)
     {
@@ -53,17 +53,17 @@ GSMSendSMSProcessorState GSMSendSMSProcessor::processState()
     gsmUtils->getGsmComm()->println("\"");
     gsmUtils->getGsmComm()->flush();
     
-    _setTimer(SEND_SMS_GSM_NO_RESPONSE_SECONDS);
-    _state = GSMSendSMSProcessorState::WAIT_FOR_TEXT_OF_SMS_REQUEST;
+    _setTimer(GSM_NO_RESPONSE_TIMEOUT_SECONDS);
+    _state = State::WAIT_FOR_TEXT_OF_SMS_REQUEST;
   }
-  else if (_state == GSMSendSMSProcessorState::WAIT_FOR_TEXT_OF_SMS_REQUEST)
+  else if (_state == State::WAIT_FOR_TEXT_OF_SMS_REQUEST)
   {
     if (gsmUtils->gsmIsSMSTypeTextRequest())
     {
-      _state = GSMSendSMSProcessorState::SEND_TEXT_OF_SMS;
+      _state = State::SEND_TEXT_OF_SMS;
     }
   }
-  else if (_state == GSMSendSMSProcessorState::SEND_TEXT_OF_SMS)
+  else if (_state == State::SEND_TEXT_OF_SMS)
   { // write message + Ctrl+Z
     Stream* gsmComm = gsmUtils->getGsmComm();
     gsmComm->print("ID: "); gsmComm->print(_smsContent->devId, HEX); gsmComm->print(", ");
@@ -77,10 +77,10 @@ GSMSendSMSProcessorState GSMSendSMSProcessor::processState()
     gsmComm->print((char)26);
     gsmComm->flush();
     
-    _state = GSMSendSMSProcessorState::WAIT_FOR_OK_AFTER_SENDING_SMS;
-    _setTimer(SEND_SMS_GSM_NO_RESPONSE_SECONDS);
+    _state = State::WAIT_FOR_OK_AFTER_SENDING_SMS;
+    _setTimer(GSM_NO_RESPONSE_TIMEOUT_SECONDS);
   }
-  else if (_state == GSMSendSMSProcessorState::WAIT_FOR_OK_AFTER_SENDING_SMS)
+  else if (_state == State::WAIT_FOR_OK_AFTER_SENDING_SMS)
   {
     // waiting for response from GSM module
   }
@@ -95,15 +95,15 @@ bool GSMSendSMSProcessor::gsmLineReceivedHandler(byte gsmLineReceived, char* lin
   }
   else if (gsmLineReceived == GSM_LINE_OK)
   {
-    if (_state == GSMSendSMSProcessorState::S2)
+    if (_state == State::S2)
     {
-      _state = GSMSendSMSProcessorState::S3;
+      _state = State::S3;
       _deactivateTimer();
       return true;
     }
-    else if (_state == GSMSendSMSProcessorState::WAIT_FOR_OK_AFTER_SENDING_SMS)
+    else if (_state == State::WAIT_FOR_OK_AFTER_SENDING_SMS)
     {
-      _state = GSMSendSMSProcessorState::OK;
+      _state = State::SUCCESS;
       _deactivateTimer();
       return true;
     }
@@ -114,6 +114,7 @@ bool GSMSendSMSProcessor::gsmLineReceivedHandler(byte gsmLineReceived, char* lin
 void GSMSendSMSProcessor::_timerHandler()
 {
   // timed out waiting for acknowledge from GSM module, failing
-  _state = GSMSendSMSProcessorState::ERROR;
+  LOG->println("GSM ERROR: response timedout!");
+  _state = State::ERROR;
 }
 
