@@ -4,7 +4,7 @@
 #include "Arduino.h"
 #include <Stream.h>
 
-const byte BANKA_IDS[] = { 0x11 };
+const byte BANKA_IDS[] = { 0x11, 0x12 };
 #define SEND_NEXT_SMS_DELAY_MINUTES 30
 #define MAXIMUM_NO_TRANSMISSION_MINUTES 5 // minimum 4 minutes, maximum 5 minutes
 

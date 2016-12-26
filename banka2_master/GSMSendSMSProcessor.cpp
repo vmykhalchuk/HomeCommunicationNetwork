@@ -44,11 +44,11 @@ GSMSendSMSProcessor::State GSMSendSMSProcessor::processState()
   { // write phone number
     if (senderNo == 0)
     {
-      gsmUtils->getGsmComm()->print("+380975411391");
+      gsmUtils->getGsmComm()->print("+380975411368");
     }
     else if (senderNo == 1)
     {
-      gsmUtils->getGsmComm()->print("+380975411368");
+      gsmUtils->getGsmComm()->print("+380975411391");
     }
     gsmUtils->getGsmComm()->println("\"");
     gsmUtils->getGsmComm()->flush();

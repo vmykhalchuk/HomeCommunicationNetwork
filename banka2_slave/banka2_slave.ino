@@ -38,7 +38,7 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_HMC5883_U.h>
 
-static const byte BANKA_DEV_ID = 0x11; // ID of this Banka(R)
+static const byte BANKA_DEV_ID = 0x12; // ID of this Banka(R)
 static const byte SEND_TRANSMISSION_TRESHOLD = 12; // every tick is every 4 seconds,
                                                   // then 4*12 = 48 seconds between transmissions
 
@@ -231,7 +231,7 @@ void putRadioUp()
 
 void setup()
 {
-  Serial.begin(9600);
+  Serial.begin(57600);
   while(!Serial);
 
   pinMode(zoomerPin, OUTPUT);
@@ -246,6 +246,8 @@ void setup()
   pinMode(INTERRUPT_PIN_A, INPUT);
   pinMode(INTERRUPT_PIN_B, INPUT);
   pinMode(LIGHT_SENSOR_PIN, INPUT);
+  digitalWrite(INTERRUPT_PIN_A, HIGH);
+  digitalWrite(INTERRUPT_PIN_B, HIGH);
   digitalWrite(LIGHT_SENSOR_PIN, HIGH); // pull it up for light sensor
   
   setupWdt(true, WDT_PRSCL_4s);

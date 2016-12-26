@@ -58,9 +58,9 @@ void WDTHandler::radioTxReceivedForBanka(byte bankaId)
   if ((lightLevel > LIGHT_LEVEL_TRESHOLD) && (lightLevel > banka_states[bankaNo].lightLevel))
     { alarm = true; banka_states[bankaNo].lightLevel = lightLevel; }
 
-  //volatile bool digSensors = (*(radioTransmissionBuf+7) > 0) || (*(radioTransmissionBuf+8) > 0);
-  //if (digSensors)
-  //  { alarm = true; banka_states[bankaNo].digSensors = true; }
+  volatile bool digSensors = (*(radioTransmissionBuf+7) > 0) || (*(radioTransmissionBuf+8) > 0);
+  if (digSensors)
+    { alarm = true; banka_states[bankaNo].digSensors = true; }
 
   volatile bool deviceResetFlag = (*(radioTransmissionBuf+1) == 1);
   if (deviceResetFlag)
