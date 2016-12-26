@@ -39,7 +39,7 @@
 #include <Adafruit_HMC5883_U.h>
 
 static const byte BANKA_DEV_ID = 0x11; // ID of this Banka(R)
-static const byte SEND_TRANSMISSION_TRESHOLD = 12; // every tick is every 8 seconds,
+static const byte SEND_TRANSMISSION_TRESHOLD = 12; // every tick is every 4 seconds,
                                                   // then 4*12 = 48 seconds between transmissions
 
 const byte zoomerPin = 5; // cannot be 13 since radio is using it!
