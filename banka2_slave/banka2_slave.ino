@@ -38,7 +38,9 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_HMC5883_U.h>
 
-static const byte BANKA_DEV_ID = 0x12; // ID of this Banka(R)
+#include "ADCUtils.h"
+
+static const byte BANKA_DEV_ID = 0x11; // ID of this Banka(R)
 static const byte SEND_TRANSMISSION_TRESHOLD = 12; // every tick is every 4 seconds,
                                                   // then 4*12 = 48 seconds between transmissions
 
@@ -52,6 +54,7 @@ const byte LIGHT_SENSOR_PIN = A3; // (pin #26 of ATMega328P)
 /* Assign a unique ID to this sensor at the same time */
 Adafruit_HMC5883_Unified mag = Adafruit_HMC5883_Unified(12345);
 
+uint8_t batteryVoltageLowByte = 0, batteryVoltageHighByte = 0;
 
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -204,7 +207,7 @@ boolean setupRadio(void)
   // getting_started sketch, and the likelihood of close proximity of the devices. RF24_PA_MAX is default.
   radio.setPALevel(RF24_PA_MAX); // RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH and RF24_PA_MAX
   radio.setDataRate(RF24_250KBPS); // (default is RF24_1MBPS)
-  radio.setChannel(118); // 2.518 Ghz - Above most Wifi Channels (default is 76)
+  radio.setChannel(255); // 118 = 2.518 Ghz - Above most Wifi Channels (default is 76)
   radio.setCRCLength(RF24_CRC_16); //(default is RF24_CRC_16)
 
   radio.openWritingPipe(addressMaster);
@@ -280,7 +283,15 @@ void setup()
     digitalWrite(zoomerPin, LOW);
     delay(500);
   }
-  
+
+  // read battery into local variables
+  ADCUtils::readVcc(batteryVoltageLowByte, batteryVoltageHighByte);
+  {
+    uint16_t _adc = batteryVoltageHighByte<<8 | batteryVoltageLowByte;
+    float r = 1.1 / float (_adc + 0.5) * 1024.0;
+    Serial.print("vcc: "); Serial.println(r);
+    Serial.flush();
+  }
 }
 
 
@@ -478,7 +489,7 @@ bool _transmitData(byte type)
 {
   putRadioUp();
   wdt_reset();
-  byte transmission[9];
+  byte transmission[11];
   // fill in data from structure
   transmission[0] = BANKA_DEV_ID;
   transmission[1] = type;
@@ -489,6 +500,8 @@ bool _transmitData(byte type)
   transmission[6] = _rneD.lightSensorData;
   transmission[7] = _rneD.portAData;
   transmission[8] = _rneD.portBData;
+  transmission[9] = batteryVoltageHighByte;
+  transmission[10] = batteryVoltageLowByte;
   bool txSucceeded = radio.write(&transmission, sizeof(transmission));
   wdt_reset();
   { // notify of send status
@@ -516,6 +529,16 @@ bool _transmitData(byte type)
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
+int readBatteryLevelCounter = 0;
+void readBatteryLevel() // is aclled every 4 seconds
+{
+  if (readBatteryLevelCounter++ > 180) // read battery measurement every 12 minutes
+  {
+    readBatteryLevelCounter = 0;
+    ADCUtils::readVcc(batteryVoltageLowByte, batteryVoltageHighByte);
+  }
+}
+
 void loop()
 {
   if (f_wdt == 0) {
@@ -531,6 +554,7 @@ void loop()
       digitalWrite(zoomerPin, HIGH);
       delay(10);
       digitalWrite(zoomerPin, LOW);
+      readBatteryLevel();
       
       //Serial.print("Data"); Serial.flush();
       byte _magState = getMagSensorState();

@@ -1,24 +1,20 @@
-#ifndef GSMSendSMSProcessor_h
-#define GSMSendSMSProcessor_h
+#ifndef GSMGetTimeProcessor_h
+#define GSMGetTimeProcessor_h
 
 #include "Arduino.h"
 #include <Stream.h>
 #include "GSMAbstrProcessor.h"
 #include "Common.h"
 #include "GSMUtils.h"
-#include "WDTHandler.h"
 
-class GSMSendSMSProcessor : public GSMAbstractProcessor
+class GSMGetTimeProcessor : public GSMAbstractProcessor
 {
   public:
-    enum State { ZERO = 0, S1, S2, S3, S4, WAIT_FOR_TEXT_OF_SMS_REQUEST, SEND_TEXT_OF_SMS, WAIT_FOR_OK_AFTER_SENDING_SMS, SUCCESS, ERROR };
+    enum State { ZERO = 0, SendCOPS_2, SendCOPS_2__WAITING_OK, SendCTZU_1, SendCTZU_1__WAITING_OK, SendCOPS_0, SendCOPS_0__WAITING_OK, WAITING_CTZU, SUCCESS, ERROR };
     
-    GSMSendSMSProcessor(GSMUtils* gsmUtils, Stream* logComm, WDTHandler* wdtHandler);
+    GSMGetTimeProcessor(GSMUtils* gsmUtils, Stream* logComm);
 
-    /**
-     * senderNo - 0 - Nataliya; 1 - Me
-     */
-    bool sendSMS(byte senderNo, SMSContent* _smsContent);
+    bool retrieveTimeFromNetwork(); // start time retrieval procedure (false if cannot start due to some error!)
 
     State processState(); // should be called as often as possible, takes minimum time to run (simulation of multithreading)
     
@@ -31,13 +27,14 @@ class GSMSendSMSProcessor : public GSMAbstractProcessor
   private:
     GSMUtils* gsmUtils;
     Stream* LOG;
-    WDTHandler* wdtHandler;
     State _state = State::ZERO;
 
     void _timerHandler();
 
-    byte senderNo;
-    SMSContent* _smsContent;
+    int _dateYYYY;
+    int _dateMMDD;
+    int _timeHHMM;
+    int _timeSS;
 };
 
 #endif

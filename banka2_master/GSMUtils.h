@@ -11,9 +11,11 @@
 #define GSM_TX_BUF_SIZE 250
 
 const char GSM_OK[] = {'O', 'K'};
+const char GSM_ERROR[] = {'E', 'R', 'R', 'O', 'R'};
 const char GSM_CPIN_READY[] = {'+','C','P','I','N',':',' ','R','E','A','D','Y'};
 const char GSM_CALL_READY[] = {'C','a','l','l',' ','R','e','a','d','y'};
 const char GSM_SMS_READY[] = {'S','M','S',' ','R','e','a','d','y'};
+const char GSM_CTZU[] = {'+', 'C', 'T', 'Z', 'U', ':', ' ', '"'}; // +CTZU: "15/05/06,17:25:42",-12,0
 
 class GSMUtils
 {

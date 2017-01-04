@@ -11,6 +11,7 @@
 #include "WDTHandler.h"
 #include "GSMInitializeProcessor.h"
 #include "GSMSendSMSProcessor.h"
+#include "GSMGetTimeProcessor.h"
 
 const byte zoomerPin = 13;
 const byte gsmModuleResetPin = 5;
@@ -18,7 +19,7 @@ const byte gsmModuleResetPin = 5;
 /* Hardware configuration:
    Set up nRF24L01 radio on SPI bus (13, ???) plus pins 7 & 8 */
 RF24 radio(7, 8);
-#define BANKA_TRANSMISSION_SIZE 9
+#define BANKA_TRANSMISSION_SIZE 11
 volatile byte transmission[BANKA_TRANSMISSION_SIZE];
 
 SoftwareSerial softSerial(4, 3);
@@ -29,7 +30,8 @@ NullSerial nullSerial;
 GSMUtils gsmUtils(&softSerial, &LOG);
 WDTHandler wdtHandler(&transmission[0], &LOG);
 GSMInitializeProcessor gsmInitializeProcessor(gsmModuleResetPin, &gsmUtils, &LOG);
-GSMSendSMSProcessor sendSMSProcessor(&gsmUtils, &LOG);
+GSMSendSMSProcessor gsmSendSMSProcessor(&gsmUtils, &LOG, &wdtHandler);
+GSMGetTimeProcessor gsmGetTimeProcessor(&gsmUtils, &LOG);
 
 //-=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=-
 
@@ -46,6 +48,9 @@ SMSContent _smsContent;
 
 volatile int gsmSendNotificationCounter = 0;
 
+#define bankaTransmissionTopRetryFailures_TIMER_MINUTES 60*24 // send status every 24 hours roughly
+volatile int bankaTransmissionTopRetryFailures_timer = 0;
+volatile byte bankaTransmissionTopRetryFailures[sizeof(BANKA_IDS)];
 
 //-=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=-
 
@@ -54,18 +59,26 @@ ISR(WDT_vect) // called once a second roughly
 {
   if (wdt_counter++ >= 60) {
     wdtHandler.wdtMinuteEvent();
+    if (bankaTransmissionTopRetryFailures_timer>0) bankaTransmissionTopRetryFailures_timer--;
     wdt_counter = 0;
   }
 
   if (gsmWdtTimer>0) gsmWdtTimer--;
 
-  sendSMSProcessor.secondEventHandler();
+  gsmSendSMSProcessor.secondEventHandler();
   gsmInitializeProcessor.secondEventHandler();
+  gsmGetTimeProcessor.secondEventHandler();
 }
 
 void setup()
 {
   setupRadio(&radio);
+
+  bankaTransmissionTopRetryFailures_timer = bankaTransmissionTopRetryFailures_TIMER_MINUTES;
+  for (int i = 0; i < sizeof(bankaTransmissionTopRetryFailures); i++)
+  {
+    bankaTransmissionTopRetryFailures[i] = 0;
+  }
 
   Serial.begin(57600);
   while (!Serial);
@@ -83,18 +96,18 @@ void setup()
   setupWdt(true, WDT_PRSCL_1s);
 
   LOG.println(F("Initialization complete."));
-  for (int i = 0; i < 5; i++) {
-    wdt_reset();
-    digitalWrite(zoomerPin, HIGH);
-    delay(500);
-    wdt_reset();
-    digitalWrite(zoomerPin, LOW);
-    delay(500);
-    delay(2000);
-    LOG.print('D');
-  }
-
-  LOG.println(); LOG.println("Starting business, now!");
+//  for (int i = 0; i < 5; i++) {
+//    wdt_reset();
+//    digitalWrite(zoomerPin, HIGH);
+//    delay(500);
+//    wdt_reset();
+//    digitalWrite(zoomerPin, LOW);
+//    delay(500);
+//    delay(2000);
+//    LOG.print('D');
+//  }
+//
+//  LOG.println(); LOG.println("Starting business, now!");
   // Start the radio listening for data
   radio.startListening();
 }
@@ -139,6 +152,9 @@ void processRadioTransmission_debug()
   DEBUG.print(" L:");  DEBUG.print(transmission[6], HEX);// Light State
   DEBUG.print(" A:");  DEBUG.print(transmission[7], HEX);// Port A interrupts
   DEBUG.print(" B:");  DEBUG.print(transmission[8], HEX);// Port B interrupts
+  uint16_t bankaVccAdc = transmission[9]<<8|transmission[10];
+  float bankaVcc = 1.1 / float (bankaVccAdc + 0.5) * 1024.0;
+  DEBUG.print(" VCC:"); DEBUG.print(bankaVcc);// Battery Voltage
   DEBUG.println();
   DEBUG.flush();
 }
@@ -148,7 +164,8 @@ void processRadioTransmission()
 {
   byte bankaId = transmission[0];
   byte communicationNo = transmission[2];
-  if (bankaId == 0 && communicationNo == 0)
+  byte failedAttempts = transmission[3];
+  if (bankaId == 0 && transmission[1] == 0 && communicationNo == 0)
   {
     return; // HOTFIX >>> this looks like radio is off and we receive very often 0 result
   }
@@ -159,7 +176,14 @@ void processRadioTransmission()
     LOG.print(F("Unknown BankaR ID: ")); LOG.println(bankaId, HEX);
     return;
   }
+  
   wdtHandler.radioTxReceivedForBanka(bankaId);
+
+  int bankaNo = wdtHandler.getBankaNoByBankaId(bankaId);
+  if (bankaTransmissionTopRetryFailures[bankaNo] < failedAttempts)
+  {
+    bankaTransmissionTopRetryFailures[bankaNo] = failedAttempts;
+  }
 }
 
 
@@ -195,30 +219,47 @@ void loop()
 
     if (gsmState == GSM_STATE_ACTIVE)
     {
-      for (byte i = 0; i < sizeof(BANKA_IDS); i++)
+      // check if once a day notification mechanism has to be triggered (=zero if yes)
+      if (bankaTransmissionTopRetryFailures_timer == 0)
       {
-        byte bankaId = BANKA_IDS[i];
-        bool canNotifyAgain = wdtHandler.canNotifyAgainWithSms(bankaId);
-        bool isOutOfReach = wdtHandler.isBankaOutOfReach(bankaId);
-        bool isAlarm = wdtHandler.isBankaAlarm(bankaId);
-        if (canNotifyAgain && (isOutOfReach || isAlarm))
+        _smsContent._type = 1;
+        _smsContent.failuresArrSize = sizeof(bankaTransmissionTopRetryFailures);
+        _smsContent.failuresArr = &(bankaTransmissionTopRetryFailures[0]);
+
+        bankaTransmissionTopRetryFailures_timer = bankaTransmissionTopRetryFailures_TIMER_MINUTES; // rewind timer to trigger again in 24 hours
+        DEBUG.println(); DEBUG.println(F("Sending SMS: ONLINE status!")); DEBUG.flush();
+        gsmState = GSM_STATE_REQUESTED_NOTIFICATION; // request send SMS state
+      }
+      else
+      {
+        // check if there is any alarm for Banka to be sent
+        for (byte i = 0; i < sizeof(BANKA_IDS); i++)
         {
-          //DEBUG.print(F("NOTIF: Can notify again: ")); DEBUG.print(canNotifyAgain);
-          //DEBUG.print(F("; isOutOfReach: ")); DEBUG.print(isOutOfReach);
-          //DEBUG.print(F("; isAlarm: ")); DEBUG.print(isAlarm);
-          //DEBUG.println(); DEBUG.flush();
-          _smsContent.devId = bankaId;
-          BankaState* bankaState = wdtHandler.getBankaState(bankaId);
-          _smsContent.magLevel = bankaState->magLevel;
-          _smsContent.lightLevel = bankaState->lightLevel;
-          _smsContent.wdtOverruns = bankaState->wdtOverruns;
-          _smsContent.outOfReach = isOutOfReach;
-          _smsContent.digSensors = bankaState->digSensors;
-          _smsContent.deviceResetFlag = bankaState->deviceResetFlag;
-          _smsContent.wdtOverrunFlag = bankaState->wdtOverrunFlag;
+          byte bankaId = BANKA_IDS[i];
+          bool canNotifyAgain = wdtHandler.canNotifyAgainWithSms(bankaId);
+          bool isOutOfReach = wdtHandler.isBankaOutOfReach(bankaId);
+          bool isAlarm = wdtHandler.isBankaAlarm(bankaId);
+          if (canNotifyAgain && (isOutOfReach || isAlarm))
+          {
+            //DEBUG.print(F("NOTIF: Can notify again: ")); DEBUG.print(canNotifyAgain);
+            //DEBUG.print(F("; isOutOfReach: ")); DEBUG.print(isOutOfReach);
+            //DEBUG.print(F("; isAlarm: ")); DEBUG.print(isAlarm);
+            //DEBUG.println(); DEBUG.flush();
+            _smsContent._type = 0;
+            _smsContent.devId = bankaId;
+            BankaState* bankaState = wdtHandler.getBankaState(bankaId);
+            _smsContent.magLevel = bankaState->magLevel;
+            _smsContent.lightLevel = bankaState->lightLevel;
+            _smsContent.wdtOverruns = bankaState->wdtOverruns;
+            _smsContent.outOfReach = isOutOfReach;
+            _smsContent.digSensors = bankaState->digSensors;
+            _smsContent.deviceResetFlag = bankaState->deviceResetFlag;
+            _smsContent.wdtOverrunFlag = bankaState->wdtOverrunFlag;
           
-          wdtHandler.resetBankaState(bankaId); // reset banka state - so new values can be loaded there
-          gsmState = GSM_STATE_REQUESTED_NOTIFICATION; break; // request send SMS state
+            wdtHandler.resetBankaState(bankaId); // reset banka state - so new values can be loaded there
+            logSendingSms();
+            gsmState = GSM_STATE_REQUESTED_NOTIFICATION; break; // request send SMS state
+          }
         }
       }
     }
@@ -259,7 +300,7 @@ void processGsmState()
       if (s == GSMInitializeProcessor::State::SUCCESS)
       {
         DEBUG.println("GSM: switching to ACTIVE STATE");
-        gsmState = GSM_STATE_ACTIVE;
+        gsmState = 21;//GSM_STATE_ACTIVE; // FIXME revert back!
       }
       else if (s == GSMInitializeProcessor::State::ERROR)
       {
@@ -275,12 +316,11 @@ void processGsmState()
     else if (gsmState == GSM_STATE_REQUESTED_NOTIFICATION)
     {
       // send SMS now
-      logSendingSms();
       gsmState = 11;
     }
     else if (gsmState == 11)
     {
-      if (!sendSMSProcessor.sendSMS(0, &_smsContent))
+      if (!gsmSendSMSProcessor.sendSMS(0, &_smsContent))
       {
         LOG.println(F("ERROR Sending SMS!")); LOG.flush();
         gsmState = GSM_STATE_ZERO; // reset GSM //// FIXME This will also render Notification as obsollette and will never send it again!
@@ -292,21 +332,50 @@ void processGsmState()
     }
     else if (gsmState == 12)
     {
-      // wait for sendSMSProcessor to finish and check results
-      GSMSendSMSProcessor::State s = sendSMSProcessor.processState();
+      // wait for gsmSendSMSProcessor to finish and check results
+      GSMSendSMSProcessor::State s = gsmSendSMSProcessor.processState();
       if (s == GSMSendSMSProcessor::State::SUCCESS)
       {
         gsmState = 13;
       }
       else if (s == GSMSendSMSProcessor::State::ERROR)
       {
-        gsmState = GSM_STATE_ZERO; // reset GSM //// FIXME This will also render Notification as obsollette and will never send it again!
+        gsmState = GSM_STATE_ACTIVE; // GSM_STATE_ZERO reset GSM //// FIXME This will also render Notification as obsollette and will never send it again!
       }
     }
     else if (gsmState == 13)
     {
       wdtHandler.setSmsNotifyPending(_smsContent.devId); // reset counter - so we do not send new sms again in short interval
       gsmState = GSM_STATE_ACTIVE; // ready for next notification to be processed
+
+      //clean up for bankaTransmissionTopRetryFailures
+      for (int i = 0; i < sizeof(bankaTransmissionTopRetryFailures); i++)
+        bankaTransmissionTopRetryFailures[i] = 0;
+    }
+    else if (gsmState == 21)
+    {
+      if (!gsmGetTimeProcessor.retrieveTimeFromNetwork())
+      {
+        LOG.println(F("Cannot start retrieval procedure!")); LOG.flush();
+        gsmState = GSM_STATE_ZERO; // reset GSM //// FIXME This will also render Notification as obsollette and will never send it again!
+      }
+      else
+      {
+        gsmState = 22;
+      }
+    }
+    else if (gsmState == 22)
+    {
+      GSMGetTimeProcessor::State s = gsmGetTimeProcessor.processState();
+      if (s == GSMGetTimeProcessor::State::SUCCESS)
+      {
+        gsmState = GSM_STATE_ACTIVE;
+      }
+      else if (s == GSMGetTimeProcessor::State::ERROR)
+      {
+        LOG.println(F("Couldn't retrieve time from network!")); LOG.flush();
+        gsmState = GSM_STATE_ACTIVE;
+      }
     }
 }
 
@@ -329,6 +398,10 @@ void processGsmLine()
     gsmLineReceived = GSM_LINE_OK;
     DEBUG.println(F("GSM says: OK")); DEBUG.flush();
   }
+  else if (gsmUtils.gsmIsLine(&GSM_ERROR[0], sizeof(GSM_ERROR))) {
+    gsmLineReceived = GSM_LINE_ERROR;
+    DEBUG.println(F("GSM says: ERROR")); DEBUG.flush();
+  }
   else
   {
     gsmLineReceived = GSM_LINE_OTHER;
@@ -336,8 +409,9 @@ void processGsmLine()
 
   if (gsmLineReceived != GSM_LINE_EMPTY)
   {
-    sendSMSProcessor.gsmLineReceivedHandler(gsmLineReceived, gsmUtils.getRxBufHeader(), gsmUtils.getRxBufSize());
+    gsmSendSMSProcessor.gsmLineReceivedHandler(gsmLineReceived, gsmUtils.getRxBufHeader(), gsmUtils.getRxBufSize());
     gsmInitializeProcessor.gsmLineReceivedHandler(gsmLineReceived, gsmUtils.getRxBufHeader(), gsmUtils.getRxBufSize());
+    gsmGetTimeProcessor.gsmLineReceivedHandler(gsmLineReceived, gsmUtils.getRxBufHeader(), gsmUtils.getRxBufSize());
   }
 
   // clean received line state after all handlers have finished

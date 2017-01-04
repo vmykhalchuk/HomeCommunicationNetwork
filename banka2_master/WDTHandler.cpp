@@ -72,6 +72,15 @@ void WDTHandler::radioTxReceivedForBanka(byte bankaId)
 
   banka_states[bankaNo].wdtOverruns = *(radioTransmissionBuf+4);
 
+  byte vccHByte = *(radioTransmissionBuf+9);
+  byte vccLByte = *(radioTransmissionBuf+10);
+  uint16_t bankaVccAdc = vccHByte<<8|vccLByte;
+  float bankaVcc = 0;
+  if (bankaVccAdc > 5) {
+    bankaVcc = 1.1 / float (bankaVccAdc + 0.5) * 1024.0;
+  }
+  banka_states[bankaNo].batteryVcc = bankaVcc;
+
   if (alarm) banka_states[bankaNo].alarm = true;
 }
 

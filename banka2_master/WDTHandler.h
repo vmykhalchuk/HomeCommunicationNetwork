@@ -24,6 +24,8 @@ struct BankaState
   bool wdtOverrunFlag = false;
 
   byte wdtOverruns = 0;
+
+  float batteryVcc = 0;
 };
 
 class WDTHandler
