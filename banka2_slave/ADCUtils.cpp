@@ -25,6 +25,7 @@ float ADCUtils::readVcc()
   // 0x12 shows 4.37 for 4.20(compact multimeter) or 4.175(big multimeter)
 
   // 0x11 shows 4.39 for 4.31(compact multimeter) or 4.28(big multimeter)
+  // 0x11 shows 4.37 for 4.??(compact multimeter) or 4.27(big multimeter)
 }
 
 void ADCUtils::readVcc(uint8_t& lowByte, uint8_t& highByte)

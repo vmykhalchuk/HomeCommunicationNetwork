@@ -207,11 +207,11 @@ boolean setupRadio(void)
   // getting_started sketch, and the likelihood of close proximity of the devices. RF24_PA_MAX is default.
   radio.setPALevel(RF24_PA_MAX); // RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH and RF24_PA_MAX
   radio.setDataRate(RF24_250KBPS); // (default is RF24_1MBPS)
-  radio.setChannel(255); // 118 = 2.518 Ghz - Above most Wifi Channels (default is 76)
+  radio.setChannel(125); // 118 = 2.518 Ghz - Above most Wifi Channels (default is 76)
   radio.setCRCLength(RF24_CRC_16); //(default is RF24_CRC_16)
 
   radio.openWritingPipe(addressMaster);
-  radio.openReadingPipe(1, addressSlave);
+  //radio.openReadingPipe(1, addressSlave);
 
   return true;
 }
