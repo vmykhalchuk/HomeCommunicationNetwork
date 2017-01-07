@@ -25,7 +25,9 @@ typedef enum { GSM_STARTUP_STATE_ZERO = 0, GSM_STARTUP_STATE_1 } gsm_startup_sta
 void setupWdt(boolean enableInterrupt, uint8_t prescaler);
 
 const byte addressMaster[6] = "MBank";
-const byte addressSlave[6] = "1Bank";
+//const byte addressSlave[6] = "SBank";
+const byte addressRepeater1[6] = "1Bank";
+const byte addressRepeater2[6] = "2Bank";
 
 bool setupRadio(RF24* radio);
 

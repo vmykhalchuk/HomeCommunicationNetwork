@@ -194,8 +194,10 @@ void setupWdt(boolean enableInterrupt, uint8_t prescaler)
 
 /* Hardware configuration: Set up nRF24L01 radio on SPI bus plus pins 7 & 8 */
 RF24 radio(7,8);
-byte addressMaster[6] = "MBank";
-byte addressSlave[6] = "1Bank";
+const byte addressMaster[6] = "MBank";
+//const byte addressSlave[6] = "SBank";
+const byte addressRepeater1[6] = "1Bank";
+const byte addressRepeater2[6] = "2Bank";
 
 boolean setupRadio(void)
 {
@@ -471,15 +473,15 @@ void registerNewEvent(byte wdtOverruns,
 
 byte _getTreshold(byte lastFailed)
 {
-  if (lastFailed > 9) lastFailed = 9; // result is 34 when lastFailed=9
+  if (lastFailed > 9) lastFailed = 9; // result is 34 when lastFailed=9 (meaning 2.26 minutes between retries)
   byte v1 = 0, v2 = 1;
   for (int i = 0; i < lastFailed; i++)
   {
     byte s = v1;
     v1 = v2;
-    v2 = s + v2;
+    v2 += s;
   }
-  return v1;
+  return v2;
 }
 
 // type - 0 - normal transmission
@@ -530,7 +532,7 @@ bool _transmitData(byte type)
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 int readBatteryLevelCounter = 0;
-void readBatteryLevel() // is aclled every 4 seconds
+void readBatteryLevel() // is called every 4 seconds
 {
   if (readBatteryLevelCounter++ > 180) // read battery measurement every 12 minutes
   {

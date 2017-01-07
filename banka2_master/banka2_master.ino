@@ -213,10 +213,23 @@ void loop()
   }
 
   // notification mechanism loop
-  if (notificationMechanismCounter++ > 10)
+  if (notificationMechanismCounter++ > 10 && gsmSendNotificationCounter > 1)
   {
     notificationMechanismCounter = 0;
+    processNotification();
+  }
 
+  // GSM Send notification mechanism
+  if (gsmSendNotificationCounter++ > 15 && notificationMechanismCounter > 1)
+  {
+    gsmSendNotificationCounter = 0;
+
+    processGsmState();
+  }
+}
+
+void processNotification()
+{
     if (gsmState == GSM_STATE_ACTIVE)
     {
       // check if once a day notification mechanism has to be triggered (=zero if yes)
@@ -263,15 +276,6 @@ void loop()
         }
       }
     }
-  }
-
-  // GSM Send notification mechanism
-  if (gsmSendNotificationCounter++ > 15)
-  {
-    gsmSendNotificationCounter = 0;
-
-    processGsmState();
-  }
 }
 
 void processGsmState()
