@@ -16,7 +16,7 @@
  */
 
 /**
- * Board ID 0x11 pinout:
+ * Board ID 0x12 pinout:
  * 
  *  | GND blue  <=> GND |TTL
  * B| RXD red   <=> TXD |RS-232
@@ -38,11 +38,13 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_HMC5883_U.h>
 
+#include "Common.h"
 #include "ADCUtils.h"
 
 static const byte BANKA_DEV_ID = 0x11; // ID of this Banka(R)
-static const byte SEND_TRANSMISSION_TRESHOLD = 12; // every tick is every 4 seconds,
-                                                  // then 4*12 = 48 seconds between transmissions
+
+static const byte SEND_TRANSMISSION_TRESHOLD = 48/TICK_SECONDS; // every tick is every TICK_SECONDS(4) seconds,
+                                                  // then TICK_SECONDS*12 = 48 seconds between transmissions
 
 const byte zoomerPin = 5; // cannot be 13 since radio is using it!
 
@@ -51,7 +53,6 @@ const byte INTERRUPT_PIN_B = 3;
 
 const byte LIGHT_SENSOR_PIN = A3; // (pin #26 of ATMega328P)
 
-/* Assign a unique ID to this sensor at the same time */
 Adafruit_HMC5883_Unified mag = Adafruit_HMC5883_Unified(12345);
 
 uint8_t batteryVoltageLowByte = 0, batteryVoltageHighByte = 0;
@@ -255,7 +256,7 @@ void setup()
   digitalWrite(INTERRUPT_PIN_B, HIGH);
   digitalWrite(LIGHT_SENSOR_PIN, HIGH); // pull it up for light sensor
   
-  setupWdt(true, WDT_PRSCL_4s);
+  setupWdt(true, WDT_PRSCL_4s); // must conform to TICK_SECONDS
 
   if (!setupRadio()) {
     while(true) {
@@ -390,23 +391,11 @@ byte getMagSensorState()
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 
-/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-/// >> light sensor area starts
 byte getLightSensorState()
 {
-  int v = 1023 - analogRead(LIGHT_SENSOR_PIN);
-  for (int i = 0; i < 10; i++) {
-    if (v < 50 + i*100) {
-      return i;
-    }
-  }
-  return 10;
+  int v = 1023 - constrain(analogRead(LIGHT_SENSOR_PIN), 0, 1023);
+  return map(v, 0, 1023, 0, 255);
 }
-/// << light sensor area ends
-/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-/// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-
 
 
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -473,7 +462,7 @@ void registerNewEvent(byte wdtOverruns,
 
 byte _getTreshold(byte lastFailed)
 {
-  if (lastFailed > 9) lastFailed = 9; // result is 34 when lastFailed=9 (meaning 2.26 minutes between retries)
+  if (lastFailed > 9) lastFailed = 9; // result is 34 when lastFailed=9 (meaning 34*TICK_SECONDS(4) = 2.26 minutes to next retry)
   byte v1 = 0, v2 = 1;
   for (int i = 0; i < lastFailed; i++)
   {
@@ -481,7 +470,7 @@ byte _getTreshold(byte lastFailed)
     v1 = v2;
     v2 += s;
   }
-  return v2;
+  return min(v2, SEND_TRANSMISSION_TRESHOLD<<1); // wait time between failed retries should not be longer then twice as usual sending wait time
 }
 
 // type - 0 - normal transmission
@@ -532,9 +521,9 @@ bool _transmitData(byte type)
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 int readBatteryLevelCounter = 0;
-void readBatteryLevel() // is called every 4 seconds
+void readBatteryLevel() // is called every TICK_SECONDS(4) seconds
 {
-  if (readBatteryLevelCounter++ > 180) // read battery measurement every 12 minutes
+  if (readBatteryLevelCounter++ > ((60/TICK_SECONDS)*12)) // read battery measurement every 12 minutes
   {
     readBatteryLevelCounter = 0;
     ADCUtils::readVcc(batteryVoltageLowByte, batteryVoltageHighByte);
@@ -552,7 +541,7 @@ void loop()
     f_wdt=0;
     
     // this is a watchdog timer interrupt!
-    { // useful load here
+    { // useful load here, is executed every TICK_SECONDS(4)
       digitalWrite(zoomerPin, HIGH);
       delay(10);
       digitalWrite(zoomerPin, LOW);
