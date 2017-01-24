@@ -58,6 +58,9 @@ const byte LIGHT_SENSOR_PIN = A3; // (pin #26 of ATMega328P)
 #define SERIAL_OUTPUT Serial
 #include <VMMiscUtils.h>
 
+#include "Common.h"
+#include "Repeaters.h"
+
 #include <HomeCommNetworkCommon.h>
 
 /**
@@ -85,6 +88,8 @@ void batteryVoltageRead()
     _debug("vcc: "); _debugln(r);
   #endif
 }
+
+RepeatersProcessor repeatersProcessor;
 
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -160,6 +165,21 @@ ISR(WDT_vect)
 }
 
 void setup()
+{
+  setupTest();
+}
+
+RepeatersProcessor_TestStub repeatersProcessor_TestStub;
+
+void setupTest()
+{
+  Serial.begin(57600);
+  while (!Serial);
+
+  repeatersProcessor_TestStub.test(repeatersProcessor);
+}
+
+void setupMain()
 {
   Serial.begin(57600);
   while(!Serial);
@@ -392,6 +412,39 @@ byte _getTreshold(byte lastFailed)
   return min(v2, SEND_TRANSMISSION_TRESHOLD<<1); // wait time between failed retries should not be longer then twice as usual sending wait time
 }
 
+byte currentChannel = 0;
+void switchChannel(byte channel)
+{
+  if (channel != currentChannel)
+  {
+    currentChannel = channel;
+    if (channel == 0)
+    {
+      radio.openWritingPipe(addressMaster);
+    }
+    else if (channel == 1)
+    {
+      radio.openWritingPipe(addressRepeater1);
+    }
+    else if (channel == 2)
+    {
+      radio.openWritingPipe(addressRepeater2);
+    }
+    else
+    { // error
+      _print("Wrong channel:"); _println(channel);
+      for (int i = 0; i < 50; i++) {
+        wdt_reset();
+        digitalWrite(zoomerPin, HIGH);
+        delay(300);
+        wdt_reset();
+        digitalWrite(zoomerPin, LOW);
+        delay(300);
+      }
+    }
+  }
+}
+
 // type - 0 - normal transmission
 //        1 - start-up transmission
 //        2 - wdt overrun transmission
@@ -399,7 +452,7 @@ bool _transmitData(byte type)
 {
   putRadioUp(radio);
   wdt_reset();
-  byte transmission[11];
+  byte transmission[12];
   // fill in data from structure
   transmission[0] = BANKA_DEV_ID;
   transmission[1] = type;
@@ -412,7 +465,13 @@ bool _transmitData(byte type)
   transmission[8] = _rneD.portBData;
   transmission[9] = batteryVoltageHighByte;
   transmission[10] = batteryVoltageLowByte;
+  transmission[11] = 0; // Relay counter (increased by each try to relay this message)
+
+  byte channel = repeatersProcessor.getChannel();
+  switchChannel(channel);
   bool txSucceeded = radio.write(&transmission, sizeof(transmission));
+  _debug("Send["); _debug(channel); _debug("]="); _println(txSucceeded);
+  repeatersProcessor.registerSendStatus(txSucceeded);
   wdt_reset();
   { // notify of send status
     if (txSucceeded) {
@@ -431,6 +490,17 @@ bool _transmitData(byte type)
       }
     }
   }
+
+  byte testChannel = repeatersProcessor.getTestChannel();
+  if (testChannel < 0xFF)
+  {
+    switchChannel(testChannel);
+    bool txSucceeded = radio.write(&transmission, sizeof(transmission));
+    _debug("SendTest["); _debug(testChannel); _debug("]="); _debugln(txSucceeded);
+    repeatersProcessor.registerTestMessageSendStatus(txSucceeded);
+    wdt_reset();
+  }
+  
   putRadioDown(radio);
   return txSucceeded;
 }
@@ -468,6 +538,7 @@ void loop()
       #endif
       
       readBatteryLevel();
+      repeatersProcessor.every4SecTick();
       
       _debug("Data");
       byte _magState = getMagSensorState();

@@ -36,7 +36,7 @@ const byte gsmModuleResetPin = 5;
 /* Hardware configuration:
    Set up nRF24L01 radio on SPI bus (13, ???) plus pins 7 & 8 */
 RF24 radio(7, 8);
-#define BANKA_TRANSMISSION_SIZE 11
+#define BANKA_TRANSMISSION_SIZE 12
 volatile byte transmission[BANKA_TRANSMISSION_SIZE];
 
 SoftwareSerial softSerial(4, 3);
@@ -169,6 +169,7 @@ void processRadioTransmission_debug()
   uint16_t bankaVccAdc = transmission[9]<<8|transmission[10];
   float bankaVcc = 1.1 / float (bankaVccAdc + 0.5) * 1024.0;
   _debug(" VCC:"); _debug(bankaVcc);// Battery Voltage
+  _debug(" RC:"); _debug(transmission[11]);
   _debugln();
 }
 
@@ -184,6 +185,8 @@ void processRadioTransmission()
   }
   
   processRadioTransmission_debug();
+
+  // FIXME transmission[11] - this is relaying counter - we should check this one if it is not 0 - then this message came from relay
 
   if (!wdtHandler.isBankaIdValid(bankaId)) {
     _print(F("Unknown BankaR ID: ")); _printlnF(bankaId, HEX);
