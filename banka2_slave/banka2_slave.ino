@@ -38,8 +38,9 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_HMC5883_U.h>
 
+#include <ADCUtils.h> // This is in VMUtils library!
+
 #include "Common.h"
-#include "ADCUtils.h"
 
 static const byte BANKA_DEV_ID = 0x11; // ID of this Banka(R)
 
@@ -56,6 +57,12 @@ const byte LIGHT_SENSOR_PIN = A3; // (pin #26 of ATMega328P)
 Adafruit_HMC5883_Unified mag = Adafruit_HMC5883_Unified(12345);
 
 uint8_t batteryVoltageLowByte = 0, batteryVoltageHighByte = 0;
+void batteryVoltageRead()
+{
+  uint16_t vcc = ADCUtils::readVccAsUint();
+  batteryVoltageHighByte = vcc>>8;
+  batteryVoltageLowByte = vcc&0x00FF;
+}
 
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -288,7 +295,7 @@ void setup()
   }
 
   // read battery into local variables
-  ADCUtils::readVcc(batteryVoltageLowByte, batteryVoltageHighByte);
+  batteryVoltageRead();
   {
     uint16_t _adc = batteryVoltageHighByte<<8 | batteryVoltageLowByte;
     float r = 1.1 / float (_adc + 0.5) * 1024.0;
@@ -526,7 +533,7 @@ void readBatteryLevel() // is called every TICK_SECONDS(4) seconds
   if (readBatteryLevelCounter++ > ((60/TICK_SECONDS)*12)) // read battery measurement every 12 minutes
   {
     readBatteryLevelCounter = 0;
-    ADCUtils::readVcc(batteryVoltageLowByte, batteryVoltageHighByte);
+    batteryVoltageRead();
   }
 }
 

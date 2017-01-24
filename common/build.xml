@@ -1,0 +1,42 @@
+<project default="deploy.paused">
+
+  <property environment="env"/>
+  <property name="arduino.lib.dir" location="${env.USERPROFILE}/Documents/Arduino/libraries" />
+
+  <target name="deploy.paused" depends="deploy">
+	<input>Press Enter to exit...</input>
+  </target>
+  
+  <target name="deploy" depends="dirs.check" if="arduino.lib.dir.exists">
+    <delete dir="${arduino.lib.dir}/HomeCommunicationNetworkLib" />
+	<copy todir="${arduino.lib.dir}/HomeCommunicationNetworkLib">
+      <fileset dir="HomeCommunicationNetworkLib"/>
+	</copy>
+
+    <delete dir="${arduino.lib.dir}/VMUtils" />
+	<copy todir="${arduino.lib.dir}/VMUtils">
+      <fileset dir="VMUtils"/>
+	</copy>
+
+    <!-- Extenral libraries -->
+    <delete dir="${arduino.lib.dir}/Adafruit_HMC5883_Unified" />
+	<copy todir="${arduino.lib.dir}/Adafruit_HMC5883_Unified">
+      <fileset dir="ext/Adafruit_HMC5883_Unified"/>
+	</copy>
+
+    <delete dir="${arduino.lib.dir}/Adafruit_Sensor" />
+	<copy todir="${arduino.lib.dir}/Adafruit_Sensor">
+      <fileset dir="ext/Adafruit_Sensor"/>
+	</copy>
+	
+	<echo>Succeeded!</echo>
+  </target>
+  
+  <target name="dirs.check">
+    <condition property="arduino.lib.dir.exists">
+      <available file="${arduino.lib.dir}" type="dir"/>
+    </condition>
+	<echo>Dir '${arduino.lib.dir}' exists: ${arduino.lib.dir.exists}</echo>
+  </target>
+
+</project>

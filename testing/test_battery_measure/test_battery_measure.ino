@@ -3,7 +3,7 @@
 #include <avr/power.h>
 #include <avr/wdt.h>
 
-#include "ADCUtils.h"
+#include <ADCUtils.h>
 
 void setup()
 {
