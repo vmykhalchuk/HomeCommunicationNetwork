@@ -27,6 +27,19 @@
  *  |
  */
 
+/**
+ * DEFINE BEFORE UPLOAD :: START
+ */
+#define SERIAL_DEBUG Serial
+static const byte BANKA_DEV_ID = 0x12; // ID of this Banka(R)
+const byte zoomerPin = 5; // cannot be 13 since radio is using it!
+const byte INTERRUPT_PIN_A = 2;
+const byte INTERRUPT_PIN_B = 3;
+const byte LIGHT_SENSOR_PIN = A3; // (pin #26 of ATMega328P)
+/**
+ * DEFINE BEFORE UPLOAD :: END
+ */
+
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
 #include <avr/power.h>
@@ -38,23 +51,28 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_HMC5883_U.h>
 
-#include <ADCUtils.h> // This is in VMUtils library!
+// This is in VMUtils library!
+#include <ADCUtils.h>
+#include <WDTUtils.h>
 
-#include "Common.h"
+#define SERIAL_OUTPUT Serial
+#include <VMMiscUtils.h>
 
-static const byte BANKA_DEV_ID = 0x11; // ID of this Banka(R)
+#include <HomeCommNetworkCommon.h>
+
+/**
+ * This system is waking up once a tick and performs actions as fast as possible to go sleep again.
+ * Every tick is: 4 seconds
+ */
+static const byte TICK_SECONDS = 4;
 
 static const byte SEND_TRANSMISSION_TRESHOLD = 48/TICK_SECONDS; // every tick is every TICK_SECONDS(4) seconds,
                                                   // then TICK_SECONDS*12 = 48 seconds between transmissions
 
-const byte zoomerPin = 5; // cannot be 13 since radio is using it!
-
-const byte INTERRUPT_PIN_A = 2;
-const byte INTERRUPT_PIN_B = 3;
-
-const byte LIGHT_SENSOR_PIN = A3; // (pin #26 of ATMega328P)
-
 Adafruit_HMC5883_Unified mag = Adafruit_HMC5883_Unified(12345);
+
+/* Hardware configuration: Set up nRF24L01 radio on SPI bus plus pins 7 & 8 */
+RF24 radio(7,8);
 
 uint8_t batteryVoltageLowByte = 0, batteryVoltageHighByte = 0;
 void batteryVoltageRead()
@@ -62,11 +80,18 @@ void batteryVoltageRead()
   uint16_t vcc = ADCUtils::readVccAsUint();
   batteryVoltageHighByte = vcc>>8;
   batteryVoltageLowByte = vcc&0x00FF;
+  #ifdef SERIAL_DEBUG
+    float r = 1.1 / float (vcc + 0.5) * 1024.0;
+    _debug("vcc: "); _debugln(r);
+  #endif
 }
 
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 /// >> interrupts routines start
+
+#include "Misc.h"
+
 volatile byte _ints_interruptsOnPinA = 0;
 volatile byte _ints_interruptsOnPinB = 0;
 void pinAInterruptRoutine(void)
@@ -134,114 +159,6 @@ ISR(WDT_vect)
   }
 }
 
-inline void enterSleepAndAttachInterrupt(void)
-{
-  cli();
-  /* Setup pin2 as an interrupt and attach handler. */
-            // digitalPinToInterrupt(2) => 0
-            // digitalPinToInterrupt(3) => 1
-            // digitalPinToInterrupt(1 | 4) => -1
-  attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN_A), pinAInterruptRoutine, LOW); // can be LOW / CHANGE / HIGH / ... FALLING
-  attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN_B), pinBInterruptRoutine, LOW);
-
-  enterSleep();
-}
-
-inline void enterSleep(void)
-{
-  byte adcsra = ADCSRA;          //save the ADC Control and Status Register A
-  ADCSRA = 0;                    //disable the ADC
-  // allowed modes:
-  // SLEEP_MODE_IDLE         (0)
-  // SLEEP_MODE_ADC          _BV(SM0)
-  // SLEEP_MODE_PWR_DOWN     _BV(SM1)
-  // SLEEP_MODE_PWR_SAVE     (_BV(SM0) | _BV(SM1))
-  // SLEEP_MODE_STANDBY      (_BV(SM1) | _BV(SM2))
-  // SLEEP_MODE_EXT_STANDBY  (_BV(SM0) | _BV(SM1) | _BV(SM2))
-  set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-  
-  cli();
-  sleep_enable();
-  //disable brown-out detection while sleeping (20-25µA)
-  uint8_t mcucr1 = MCUCR | _BV(BODS) | _BV(BODSE);
-  uint8_t mcucr2 = mcucr1 & ~_BV(BODSE);
-  MCUCR = mcucr1;
-  MCUCR = mcucr2;
-  sei(); //after sei we have one clock cycle to execute any command before interrupt will be activated
-  sleep_cpu(); /* The program will continue from here. */ // it was : sleep_mode() , seems to be same functionality
-  sleep_disable();
-  ADCSRA = adcsra;               //restore ADCSRA
-}
-
-typedef enum { WDT_PRSCL_16ms = 0, WDT_PRSCL_32ms, WDT_PRSCL_64ms, WDT_PRSCL_125ms, 
-    WDT_PRSCL_250ms, WDT_PRSCL_500ms, WDT_PRSCL_1s, WDT_PRSCL_2s, WDT_PRSCL_4s, WDT_PRSCL_8s } edt_prescaler ;
-
-void setupWdt(boolean enableInterrupt, uint8_t prescaler)
-{
-  byte wdtcsrValue = enableInterrupt ? 1<<WDIE : 0;
-  wdtcsrValue |= (prescaler & 1) ? 1<<WDP0 : 0;
-  wdtcsrValue |= (prescaler & 2) ? 1<<WDP1 : 0;
-  wdtcsrValue |= (prescaler & 4) ? 1<<WDP2 : 0;
-  wdtcsrValue |= (prescaler & 8) ? 1<<WDP3 : 0;
-  
-  cli();
-  /*** Setup the WDT ***/
-  /* Clear the reset flag. */
-  MCUSR &= ~(1<<WDRF); // chapter 11.9
-  /* In order to change WDE or the prescaler, we need to
-   * set WDCE (This will allow updates for 4 clock cycles).
-   */
-  WDTCSR |= (1<<WDCE) | (1<<WDE); // chapter 11.9 and scroll up
-  /* set new watchdog timeout prescaler value */
-  // WDP0 & WDP3 = 8sec
-  // WDIE = enable interrupt (note no reset)
-  //WDTCSR = 1<<WDIE | 1<<WDP0 | 1<<WDP3; /* 8.0 seconds */
-  WDTCSR = wdtcsrValue;
-  sei();
-}
-
-/* Hardware configuration: Set up nRF24L01 radio on SPI bus plus pins 7 & 8 */
-RF24 radio(7,8);
-const byte addressMaster[6] = "MBank";
-//const byte addressSlave[6] = "SBank";
-const byte addressRepeater1[6] = "1Bank";
-const byte addressRepeater2[6] = "2Bank";
-
-boolean setupRadio(void)
-{
-  if (!radio.begin())
-  {
-    return false;
-  }
-  // Set the PA Level low to prevent power supply related issues since this is a
-  // getting_started sketch, and the likelihood of close proximity of the devices. RF24_PA_MAX is default.
-  radio.setPALevel(RF24_PA_MAX); // RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH and RF24_PA_MAX
-  radio.setDataRate(RF24_250KBPS); // (default is RF24_1MBPS)
-  radio.setChannel(125); // 118 = 2.518 Ghz - Above most Wifi Channels (default is 76)
-  radio.setCRCLength(RF24_CRC_16); //(default is RF24_CRC_16)
-
-  radio.openWritingPipe(addressMaster);
-  //radio.openReadingPipe(1, addressSlave);
-
-  return true;
-}
-
-volatile boolean isRadioUp = true;
-void putRadioDown()
-{
-  if (isRadioUp) {
-    radio.powerDown();
-  }
-  isRadioUp = false;
-}
-void putRadioUp()
-{
-  if (!isRadioUp) {
-    radio.powerUp();
-  }
-  isRadioUp = true;
-}
-
 void setup()
 {
   Serial.begin(57600);
@@ -263,12 +180,11 @@ void setup()
   digitalWrite(INTERRUPT_PIN_B, HIGH);
   digitalWrite(LIGHT_SENSOR_PIN, HIGH); // pull it up for light sensor
   
-  setupWdt(true, WDT_PRSCL_4s); // must conform to TICK_SECONDS
+  WDTUtils::setupWdt(true, WDTUtils::PRSCL::_4s); // must conform to TICK_SECONDS
 
-  if (!setupRadio()) {
+  if (!setupRadio(radio)) {
     while(true) {
-      Serial.println("Radio Initialization failed!!!");
-      Serial.flush();
+      _println("Radio Initialization failed!!!");
       for (int i = 0; i < 3; i++) {
         digitalWrite(zoomerPin, HIGH);
         delay(500);
@@ -280,11 +196,11 @@ void setup()
       wdt_reset();
     }
   }
+  radio.openWritingPipe(addressMaster);
 
   mag.begin();
 
-  Serial.println("Initialization complete.");
-  Serial.flush();
+  _println("Initialization complete.");
   for (int i = 0; i < 5; i++) {
     wdt_reset();
     digitalWrite(zoomerPin, HIGH);
@@ -296,12 +212,6 @@ void setup()
 
   // read battery into local variables
   batteryVoltageRead();
-  {
-    uint16_t _adc = batteryVoltageHighByte<<8 | batteryVoltageLowByte;
-    float r = 1.1 / float (_adc + 0.5) * 1024.0;
-    Serial.print("vcc: "); Serial.println(r);
-    Serial.flush();
-  }
 }
 
 
@@ -446,6 +356,7 @@ void registerNewEvent(byte wdtOverruns,
     boolean succeeded = _transmitData(mcuInit ? 1 : 0);
     if (succeeded)
     {
+      _debugln("Transmit succeeded");
       if (mcuInit) mcuInit = false;
       
       _rneD.transmissionId++;
@@ -460,6 +371,7 @@ void registerNewEvent(byte wdtOverruns,
     }
     else
     {
+      _debug("Transmit failed: "); _debugln(_rneD.lastFailed);
       _rneD.lastFailed++; if (_rneD.lastFailed > 100) _rneD.lastFailed = 100;
       _rneD.sendTransmissionCounter = 0;
       _rneD.sendTransmissionTreshold = _getTreshold(_rneD.lastFailed);
@@ -485,7 +397,7 @@ byte _getTreshold(byte lastFailed)
 //        2 - wdt overrun transmission
 bool _transmitData(byte type)
 {
-  putRadioUp();
+  putRadioUp(radio);
   wdt_reset();
   byte transmission[11];
   // fill in data from structure
@@ -519,7 +431,7 @@ bool _transmitData(byte type)
       }
     }
   }
-  putRadioDown();
+  putRadioDown(radio);
   return txSucceeded;
 }
 
@@ -549,23 +461,26 @@ void loop()
     
     // this is a watchdog timer interrupt!
     { // useful load here, is executed every TICK_SECONDS(4)
-      digitalWrite(zoomerPin, HIGH);
-      delay(10);
-      digitalWrite(zoomerPin, LOW);
+      #ifdef SERIAL_DEBUG
+        digitalWrite(zoomerPin, HIGH);
+        delay(10);
+        digitalWrite(zoomerPin, LOW);
+      #endif
+      
       readBatteryLevel();
       
-      //Serial.print("Data"); Serial.flush();
+      _debug("Data");
       byte _magState = getMagSensorState();
-      //Serial.print(" m="); Serial.print(_magState); Serial.flush();
+      _debug(" m="); _debug(_magState);
       wdt_reset();
       byte _lightState = getLightSensorState();
-      //Serial.print(" l="); Serial.print(_lightState); Serial.flush();
+      _debug(" l="); _debug(_lightState);
       wdt_reset();
       byte _intsOnPinA = readInterruptsOnPinA();
-      //Serial.print(" a="); Serial.print(_intsOnPinA); Serial.flush();
+      _debug(" a="); _debug(_intsOnPinA);
       wdt_reset();
       byte _intsOnPinB = readInterruptsOnPinB();
-      //Serial.print(" b="); Serial.print(_intsOnPinB); Serial.println(); Serial.flush();
+      _debug(" b="); _debug(_intsOnPinB); _debugln();
       wdt_reset();
       registerNewEvent(wdt_overruns, _magState, _lightState, _intsOnPinA, _intsOnPinB);
     }
@@ -580,8 +495,7 @@ void loop()
     
     cli();
     while(true) {
-      Serial.println("Program hanged!");
-      Serial.flush();
+      _println("Program hanged!");
       _transmitData(3);
       for (int i = 0; i < 50; i++) {
         wdt_reset();

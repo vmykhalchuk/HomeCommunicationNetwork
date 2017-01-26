@@ -1,10 +1,9 @@
 #include "Arduino.h"
 #include "GSMGetTimeProcessor.h"
 
-GSMGetTimeProcessor::GSMGetTimeProcessor(GSMUtils* gsmUtils, Stream* logComm)
+GSMGetTimeProcessor::GSMGetTimeProcessor(GSMUtils* gsmUtils)
 {
   this->gsmUtils = gsmUtils;
-  this->LOG = logComm;
 }
 
 bool GSMGetTimeProcessor::retrieveTimeFromNetwork()
@@ -75,7 +74,7 @@ Indeed it doesn't work for me :(
   return _state;
 }
 
-bool GSMGetTimeProcessor::gsmLineReceivedHandler(byte gsmLineReceived, char* lineStr, int lineSize)
+bool GSMGetTimeProcessor::gsmLineReceivedHandler(byte gsmLineReceived, __attribute__((unused)) char* lineStr, __attribute__((unused)) int lineSize)
 {
   if (gsmLineReceived == GSM_LINE_NONE || gsmLineReceived == GSM_LINE_EMPTY)
   {
@@ -115,7 +114,7 @@ bool GSMGetTimeProcessor::gsmLineReceivedHandler(byte gsmLineReceived, char* lin
 void GSMGetTimeProcessor::_timerHandler()
 {
   // timed out waiting for acknowledge from GSM module, failing
-  LOG->println("GSM ERROR: response timedout!");
+  _println(F("GSM ERROR: response timedout!"));
   _state = State::ERROR;
 }
 

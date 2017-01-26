@@ -1,13 +1,10 @@
 #include "Arduino.h"
 #include "GSMInitializeProcessor.h"
 
-#define DEBUG (*LOG) // FIXME Later we should somehow totally turn off Debug sections of code
-
-GSMInitializeProcessor::GSMInitializeProcessor(byte gsmModuleResetPin, GSMUtils* gsmUtils, Stream* logComm)
+GSMInitializeProcessor::GSMInitializeProcessor(byte gsmModuleResetPin, GSMUtils* gsmUtils)
 {
   this->gsmModuleResetPin = gsmModuleResetPin;
   this->gsmUtils = gsmUtils;
-  this->LOG = logComm;
 }
 
 void GSMInitializeProcessor::_timerHandler()
@@ -23,7 +20,7 @@ void GSMInitializeProcessor::_timerHandler()
   else
   {
     // timed out waiting for acknowledge from GSM module, failing
-    LOG->println(F("GSM ERROR: response timedout!")); LOG->flush();
+    _println(F("GSM ERROR: response timedout!"));
     _state = State::ERROR;
   }
 }
@@ -45,7 +42,7 @@ GSMInitializeProcessor::State GSMInitializeProcessor::processState()
 {
   if (_state == State::S1)
   {
-    DEBUG.println(F("GSMInitProc[S1]")); DEBUG.flush();
+    _debugln(F("GSMInitProc[S1]"));
     digitalWrite(gsmModuleResetPin, LOW);
     _setTimer(5); // 5 seconds
     _state = State::S2;
@@ -56,7 +53,7 @@ GSMInitializeProcessor::State GSMInitializeProcessor::processState()
   }
   else if (_state == State::S3)
   {
-    DEBUG.println(F("GSMInitProc[S3]")); DEBUG.flush();
+    _debugln(F("GSMInitProc[S3]"));
     digitalWrite(gsmModuleResetPin, HIGH);
     _setTimer(6); // 6 seconds
     _state = State::S4;
@@ -65,7 +62,7 @@ GSMInitializeProcessor::State GSMInitializeProcessor::processState()
   else if (_state == State::S4) {} // wait for timer to switch to next S5
   else if (_state == State::S5)
   {
-    DEBUG.println(F("GSMInitProc[S5]")); DEBUG.flush();
+    _debugln(F("GSMInitProc[S5]"));
     gsmUtils->resetGsmRxChannel();
     //    processGsmLine_reset();
     gsmUtils->gsm_sendCharBuf[0] = 'A'; gsmUtils->gsm_sendCharBuf[1] = 'T'; gsmUtils->gsm_sendCharBuf_size=2;
@@ -94,7 +91,7 @@ bool GSMInitializeProcessor::gsmLineReceivedHandler(byte gsmLineReceived, char* 
   {
     if (_state == State::WAITING_FOR_AT_ECHO)
     {
-      DEBUG.println(F("GSMInitProc[AT received]")); DEBUG.flush();
+      _debugln(F("GSMInitProc[AT received]"));
       _state = State::WAITING_FOR_OK_AFTER_AT_ECHO;
       return true;
     }
@@ -103,7 +100,7 @@ bool GSMInitializeProcessor::gsmLineReceivedHandler(byte gsmLineReceived, char* 
   {
     if (_state == State::WAITING_FOR_OK_AFTER_AT_ECHO)
     {
-      DEBUG.println(F("GSMInitProc[OK received]")); DEBUG.flush();
+      _debugln(F("GSMInitProc[OK received]"));
       _state = State::RECEIVED_AT_AND_OK;
       return true;
     }
@@ -120,13 +117,13 @@ bool GSMInitializeProcessor::gsmLineReceivedHandler(byte gsmLineReceived, char* 
       else if (gsmUtils->gsmIsLine(&GSM_SMS_READY[0], sizeof(GSM_SMS_READY)))
       {
         _state = State::SUCCESS;
-        DEBUG.println(F("GSM MODULE INITIALIZED!")); DEBUG.flush();
+        _debugln(F("GSM MODULE INITIALIZED!"));
         _deactivateTimer();
         return true;
       }
       else
       {
-        DEBUG.println(F("ERROR: GSM strange line received")); DEBUG.flush();
+        _debugln(F("ERROR: GSM strange line received"));
       }
     }
   }

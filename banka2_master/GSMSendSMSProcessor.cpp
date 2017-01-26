@@ -1,10 +1,9 @@
 #include "Arduino.h"
 #include "GSMSendSMSProcessor.h"
 
-GSMSendSMSProcessor::GSMSendSMSProcessor(GSMUtils* gsmUtils, Stream* logComm, WDTHandler* wdtHandler)
+GSMSendSMSProcessor::GSMSendSMSProcessor(GSMUtils* gsmUtils, WDTHandler* wdtHandler)
 {
   this->gsmUtils = gsmUtils;
-  this->LOG = logComm;
   this->wdtHandler = wdtHandler;
 }
 
@@ -148,7 +147,7 @@ bool GSMSendSMSProcessor::gsmLineReceivedHandler(byte gsmLineReceived, char* lin
 void GSMSendSMSProcessor::_timerHandler()
 {
   // timed out waiting for acknowledge from GSM module, failing
-  LOG->println("GSM ERROR: response timedout!");
+  _println(F("GSM ERROR: response timedout!"));
   _state = State::ERROR;
 }
 

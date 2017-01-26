@@ -3,6 +3,7 @@
 
 #include "Arduino.h"
 #include <Stream.h>
+#include <VMMiscUtils.h>
 
 const byte BANKA_IDS[] = { 0x11, 0x12 };
 #define SEND_NEXT_SMS_DELAY_MINUTES 30
@@ -31,7 +32,7 @@ struct BankaState
 class WDTHandler
 {
   public:
-    WDTHandler(volatile byte* radioTransmissionBuf, Stream* logComm);
+    WDTHandler(volatile byte* radioTransmissionBuf);
     void wdtMinuteEvent(); // must be called once a minute
     
     int getBankaNoByBankaId(byte bankaId); // returns -1 if not found
@@ -47,7 +48,6 @@ class WDTHandler
     void resetBankaState(byte bankaId);// call it to reset, do it only when banka is being processed!
     BankaState* getBankaState(byte bankaId);
   private:
-    Stream* LOG;
     volatile byte* radioTransmissionBuf;
     BankaState banka_states[sizeof(BANKA_IDS)];
 };

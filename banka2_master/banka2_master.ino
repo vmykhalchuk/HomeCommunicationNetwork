@@ -1,3 +1,13 @@
+/**
+ * DEFINE BEFORE UPLOAD :: START
+ */
+#define SERIAL_OUTPUT Serial
+#define SERIAL_DEBUG Serial
+/**
+ * DEFINE BEFORE UPLOAD :: END
+ */
+
+
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
 #include <avr/power.h>
@@ -5,6 +15,13 @@
 #include <SPI.h>
 #include <SoftwareSerial.h>
 #include <RF24.h>
+
+// This is in VMUtils library!
+#include <ADCUtils.h>
+#include <WDTUtils.h>
+#include <VMMiscUtils.h>
+
+#include <HomeCommNetworkCommon.h>
 
 #include "Common.h"
 #include "GSMUtils.h"
@@ -23,15 +40,12 @@ RF24 radio(7, 8);
 volatile byte transmission[BANKA_TRANSMISSION_SIZE];
 
 SoftwareSerial softSerial(4, 3);
-NullSerial nullSerial;
 
-#define LOG Serial
-#define DEBUG LOG // might be nullSerial to remove debug logs
-GSMUtils gsmUtils(&softSerial, &LOG);
-WDTHandler wdtHandler(&transmission[0], &LOG);
-GSMInitializeProcessor gsmInitializeProcessor(gsmModuleResetPin, &gsmUtils, &LOG);
-GSMSendSMSProcessor gsmSendSMSProcessor(&gsmUtils, &LOG, &wdtHandler);
-GSMGetTimeProcessor gsmGetTimeProcessor(&gsmUtils, &LOG);
+GSMUtils gsmUtils(&softSerial);
+WDTHandler wdtHandler(&transmission[0]);
+GSMInitializeProcessor gsmInitializeProcessor(gsmModuleResetPin, &gsmUtils);
+GSMSendSMSProcessor gsmSendSMSProcessor(&gsmUtils, &wdtHandler);
+GSMGetTimeProcessor gsmGetTimeProcessor(&gsmUtils);
 
 //-=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=--=-=-=-=-=-
 
@@ -72,10 +86,11 @@ ISR(WDT_vect) // called once a second roughly
 
 void setup()
 {
-  setupRadio(&radio);
+  setupRadio(radio);
+  radio.openReadingPipe(1, addressMaster);
 
   bankaTransmissionTopRetryFailures_timer = bankaTransmissionTopRetryFailures_TIMER_MINUTES;
-  for (int i = 0; i < sizeof(bankaTransmissionTopRetryFailures); i++)
+  for (byte i = 0; i < sizeof(bankaTransmissionTopRetryFailures); i++)
   {
     bankaTransmissionTopRetryFailures[i] = 0;
   }
@@ -93,9 +108,9 @@ void setup()
     delay(1000);
   }
 
-  setupWdt(true, WDT_PRSCL_1s);
+  WDTUtils::setupWdt(true, WDTUtils::PRSCL::_1s);
 
-  LOG.println(F("Initialization complete."));
+  _println(F("Initialization complete."));
 //  for (int i = 0; i < 5; i++) {
 //    wdt_reset();
 //    digitalWrite(zoomerPin, HIGH);
@@ -104,10 +119,10 @@ void setup()
 //    digitalWrite(zoomerPin, LOW);
 //    delay(500);
 //    delay(2000);
-//    LOG.print('D');
+//    _print('D');
 //  }
 //
-//  LOG.println(); LOG.println("Starting business, now!");
+//  _println(); _println("Starting business, now!");
   // Start the radio listening for data
   radio.startListening();
 }
@@ -118,45 +133,43 @@ void processGsmLine_debug()
   byte gsm_rx_buf_size = gsmUtils.getRxBufSize();
   volatile char* gsmRxBuf = gsmUtils.getRxBufHeader();
 
-  DEBUG.println();
-  DEBUG.print(" GSM:");
-  //DEBUG.print(gsm_rx_buf_size);
+  _debugln();
+  _debug(" GSM:");
+  //_debug(gsm_rx_buf_size);
   if (gsm_rx_buf_size > 0) {
-    DEBUG.print('|');
+    _debug('|');
     for (byte i = 0; i < gsm_rx_buf_size; i++) {
-      DEBUG.print(*(gsmRxBuf + i));
+      _debug(*(gsmRxBuf + i));
     }
-    DEBUG.print('|');
+    _debug('|');
     
-    //DEBUG.print((byte)(*gsmRxBuf), HEX);
+    //_debugF((byte)(*gsmRxBuf), HEX);
     //if (gsm_rx_buf_size > 1)
     //{
-    //  DEBUG.print('-');
-    //  DEBUG.print((byte)*(gsmRxBuf + gsm_rx_buf_size - 1), HEX);
+    //  _debug('-');
+    //  _debugF((byte)*(gsmRxBuf + gsm_rx_buf_size - 1), HEX);
     //}
-    //DEBUG.print('|');
+    //_debug('|');
   }
-  DEBUG.println();
-  DEBUG.flush();
+  _debugln();
 }
 
 void processRadioTransmission_debug()
 {
-  DEBUG.println();
-  DEBUG.print(" ID:"); DEBUG.print(transmission[0], HEX);// Banka(R) ID
-  DEBUG.print(" T:");  DEBUG.print(transmission[1], HEX);// 0- normal; 1- startup; 2- wdt overrun transmission
-  DEBUG.print(" C:");  DEBUG.print(transmission[2], HEX);// Communication No
-  DEBUG.print(" F:");  DEBUG.print(transmission[3], HEX);// Failed attempts to deliver this communication
-  DEBUG.print(" W:");  DEBUG.print(transmission[4], HEX);// WDT overruns
-  DEBUG.print(" M:");  DEBUG.print(transmission[5], HEX);// Mag State
-  DEBUG.print(" L:");  DEBUG.print(transmission[6], HEX);// Light State
-  DEBUG.print(" A:");  DEBUG.print(transmission[7], HEX);// Port A interrupts
-  DEBUG.print(" B:");  DEBUG.print(transmission[8], HEX);// Port B interrupts
+  _debugln();
+  _debug(" ID:"); _debugF(transmission[0], HEX);// Banka(R) ID
+  _debug(" T:");  _debugF(transmission[1], HEX);// 0- normal; 1- startup; 2- wdt overrun transmission
+  _debug(" C:");  _debugF(transmission[2], HEX);// Communication No
+  _debug(" F:");  _debugF(transmission[3], HEX);// Failed attempts to deliver this communication
+  _debug(" W:");  _debugF(transmission[4], HEX);// WDT overruns
+  _debug(" M:");  _debugF(transmission[5], HEX);// Mag State
+  _debug(" L:");  _debugF(transmission[6], HEX);// Light State
+  _debug(" A:");  _debugF(transmission[7], HEX);// Port A interrupts
+  _debug(" B:");  _debugF(transmission[8], HEX);// Port B interrupts
   uint16_t bankaVccAdc = transmission[9]<<8|transmission[10];
   float bankaVcc = 1.1 / float (bankaVccAdc + 0.5) * 1024.0;
-  DEBUG.print(" VCC:"); DEBUG.print(bankaVcc);// Battery Voltage
-  DEBUG.println();
-  DEBUG.flush();
+  _debug(" VCC:"); _debug(bankaVcc);// Battery Voltage
+  _debugln();
 }
 
 
@@ -173,7 +186,7 @@ void processRadioTransmission()
   processRadioTransmission_debug();
 
   if (!wdtHandler.isBankaIdValid(bankaId)) {
-    LOG.print(F("Unknown BankaR ID: ")); LOG.println(bankaId, HEX);
+    _print(F("Unknown BankaR ID: ")); _printlnF(bankaId, HEX);
     return;
   }
   
@@ -240,7 +253,7 @@ void processNotification()
         _smsContent.failuresArr = &(bankaTransmissionTopRetryFailures[0]);
 
         bankaTransmissionTopRetryFailures_timer = bankaTransmissionTopRetryFailures_TIMER_MINUTES; // rewind timer to trigger again in 24 hours
-        DEBUG.println(); DEBUG.println(F("Sending SMS: ONLINE status!")); DEBUG.flush();
+        _debugln(); _debugln(F("Sending SMS: ONLINE status!"));
         gsmState = GSM_STATE_REQUESTED_NOTIFICATION; // request send SMS state
       }
       else
@@ -254,10 +267,10 @@ void processNotification()
           bool isAlarm = wdtHandler.isBankaAlarm(bankaId);
           if (canNotifyAgain && (isOutOfReach || isAlarm))
           {
-            //DEBUG.print(F("NOTIF: Can notify again: ")); DEBUG.print(canNotifyAgain);
-            //DEBUG.print(F("; isOutOfReach: ")); DEBUG.print(isOutOfReach);
-            //DEBUG.print(F("; isAlarm: ")); DEBUG.print(isAlarm);
-            //DEBUG.println(); DEBUG.flush();
+            //_debug(F("NOTIF: Can notify again: ")); _debug(canNotifyAgain);
+            //_debug(F("; isOutOfReach: ")); _debug(isOutOfReach);
+            //_debug(F("; isAlarm: ")); _debug(isAlarm);
+            //_debugln();
             _smsContent._type = 0;
             _smsContent.devId = bankaId;
             BankaState* bankaState = wdtHandler.getBankaState(bankaId);
@@ -290,7 +303,7 @@ void processGsmState()
       // start reset sequence
       if (!gsmInitializeProcessor.startGSMInitialization())
       {
-        LOG.println(F("Cannot start GSM initialization!")); LOG.flush();
+        _println(F("Cannot start GSM initialization!"));
         delay(20000);
       }
       else
@@ -303,12 +316,12 @@ void processGsmState()
       GSMInitializeProcessor::State s = gsmInitializeProcessor.processState();
       if (s == GSMInitializeProcessor::State::SUCCESS)
       {
-        DEBUG.println("GSM: switching to ACTIVE STATE");
+        _debugln(F("GSM: switching to ACTIVE STATE"));
         gsmState = 21;//GSM_STATE_ACTIVE; // FIXME revert back!
       }
       else if (s == GSMInitializeProcessor::State::ERROR)
       {
-        LOG.println(F("Error happened during GSM initialization!")); LOG.flush();
+        _println(F("Error happened during GSM initialization!"));
         delay(20000);
         gsmState = GSM_STATE_ZERO;
       }
@@ -326,7 +339,7 @@ void processGsmState()
     {
       if (!gsmSendSMSProcessor.sendSMS(0, &_smsContent))
       {
-        LOG.println(F("ERROR Sending SMS!")); LOG.flush();
+        _println(F("ERROR Sending SMS!"));
         gsmState = GSM_STATE_ZERO; // reset GSM //// FIXME This will also render Notification as obsollette and will never send it again!
       }
       else
@@ -353,14 +366,14 @@ void processGsmState()
       gsmState = GSM_STATE_ACTIVE; // ready for next notification to be processed
 
       //clean up for bankaTransmissionTopRetryFailures
-      for (int i = 0; i < sizeof(bankaTransmissionTopRetryFailures); i++)
+      for (byte i = 0; i < sizeof(bankaTransmissionTopRetryFailures); i++)
         bankaTransmissionTopRetryFailures[i] = 0;
     }
     else if (gsmState == 21)
     {
       if (!gsmGetTimeProcessor.retrieveTimeFromNetwork())
       {
-        LOG.println(F("Cannot start retrieval procedure!")); LOG.flush();
+        _println(F("Cannot start retrieval procedure!"));
         gsmState = GSM_STATE_ZERO; // reset GSM //// FIXME This will also render Notification as obsollette and will never send it again!
       }
       else
@@ -377,7 +390,7 @@ void processGsmState()
       }
       else if (s == GSMGetTimeProcessor::State::ERROR)
       {
-        LOG.println(F("Couldn't retrieve time from network!")); LOG.flush();
+        _println(F("Couldn't retrieve time from network!"));
         gsmState = GSM_STATE_ACTIVE;
       }
     }
@@ -396,15 +409,15 @@ void processGsmLine()
   else if (gsmUtils.gsmIsLine(&(gsmUtils.gsm_sendCharBuf[0]), gsmUtils.gsm_sendCharBuf_size))
   {
     gsmLineReceived = GSM_LINE_SAME_AS_SENT; // Echo from GSM module
-    DEBUG.println(F("GSM says: <ECHO>")); DEBUG.flush();
+    _debugln(F("GSM says: <ECHO>"));
   }
   else if (gsmUtils.gsmIsLine(&GSM_OK[0], sizeof(GSM_OK))) {
     gsmLineReceived = GSM_LINE_OK;
-    DEBUG.println(F("GSM says: OK")); DEBUG.flush();
+    _debugln(F("GSM says: OK"));
   }
   else if (gsmUtils.gsmIsLine(&GSM_ERROR[0], sizeof(GSM_ERROR))) {
     gsmLineReceived = GSM_LINE_ERROR;
-    DEBUG.println(F("GSM says: ERROR")); DEBUG.flush();
+    _debugln(F("GSM says: ERROR"));
   }
   else
   {
@@ -424,16 +437,15 @@ void processGsmLine()
 
 void logSendingSms()
 {
-      DEBUG.print(F("Sending SMS: "));
-      DEBUG.print(F("ID: ")); DEBUG.print(_smsContent.devId, HEX); DEBUG.print(F(", "));
-      if (_smsContent.magLevel > 0) { DEBUG.print(F("MAG: ")); DEBUG.print(_smsContent.magLevel); DEBUG.print(F(", ")); }
-      if (_smsContent.lightLevel > 0) { DEBUG.print(F("LIG: ")); DEBUG.print(_smsContent.lightLevel); DEBUG.print(F(", ")); }
-      if (_smsContent.digSensors) { DEBUG.print(F("AorB, ")); }
-      if (_smsContent.deviceResetFlag) { DEBUG.print(F("Reset/PowerUp, ")); }
-      if (_smsContent.wdtOverrunFlag) { DEBUG.print(F("WatchDog!, ")); }
-      if (_smsContent.outOfReach) { DEBUG.print(F("Missing!, ")); }
-      if (_smsContent.wdtOverruns > 0) { DEBUG.print(F("OV: ")); DEBUG.print(_smsContent.wdtOverruns); }
-      DEBUG.println();
-      DEBUG.flush();
+      _debug(F("Sending SMS: "));
+      _debug(F("ID: ")); _debugF(_smsContent.devId, HEX); _debug(F(", "));
+      if (_smsContent.magLevel > 0) { _debug(F("MAG: ")); _debug(_smsContent.magLevel); _debug(F(", ")); }
+      if (_smsContent.lightLevel > 0) { _debug(F("LIG: ")); _debug(_smsContent.lightLevel); _debug(F(", ")); }
+      if (_smsContent.digSensors) { _debug(F("AorB, ")); }
+      if (_smsContent.deviceResetFlag) { _debug(F("Reset/PowerUp, ")); }
+      if (_smsContent.wdtOverrunFlag) { _debug(F("WatchDog!, ")); }
+      if (_smsContent.outOfReach) { _debug(F("Missing!, ")); }
+      if (_smsContent.wdtOverruns > 0) { _debug(F("OV: ")); _debug(_smsContent.wdtOverruns); }
+      _debugln();
 }
 

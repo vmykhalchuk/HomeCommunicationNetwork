@@ -1,0 +1,34 @@
+#######################################
+# Syntax Coloring Map
+#######################################
+
+#######################################
+# Class (KEYWORD1)
+#######################################
+
+WDTUtils	KEYWORD1
+NullSerial KEYWORD1
+ADCUtils KEYWORD1
+VMMiscUtils KEYWORD1
+
+#######################################
+# Datatypes (KEYWORD2)
+#######################################
+
+WDTUtils::PRSCL	KEYWORD2
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+_println	KEYWORD2
+_printlnF	KEYWORD2
+_print		KEYWORD2
+_printF		KEYWORD2
+_print_flush	KEYWORD2
+
+_debugln	KEYWORD2
+_debuglnF	KEYWORD2
+_debug		KEYWORD2
+_debugF		KEYWORD2
+_debug_flush	KEYWORD2

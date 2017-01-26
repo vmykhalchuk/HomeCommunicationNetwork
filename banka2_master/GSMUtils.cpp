@@ -1,13 +1,11 @@
 #include "Arduino.h"
 #include "GSMUtils.h"
 
-#define LOG (*logComm)
 #define GSMSerial (*gsmComm)
 
-GSMUtils::GSMUtils(Stream* gsmComm, Stream* logComm)
+GSMUtils::GSMUtils(Stream* gsmComm)
 {
   this->gsmComm = gsmComm;
-  this->logComm = logComm;
 }
 
 void GSMUtils::_serialEvent()
@@ -16,7 +14,7 @@ void GSMUtils::_serialEvent()
 
   if (gsm_rx_buf_line_cr && (z++ > 500)) // TODO set it to 1000, or tune it accordingly to speed of COM port
   {
-    LOG.print('!');
+    _debug('!'); _debug_flush();
     if (gsm_rx_buf_line_cr) {
       gsm_rx_buf_full_line = true;
       return;
@@ -27,7 +25,7 @@ void GSMUtils::_serialEvent()
   {
     z = 0;
     char c = (char)GSMSerial.peek();
-    LOG.print('.');
+    _debug('.'); _debug_flush();
     
     if (gsm_rx_buf_line_cr) {
       if (c == LF) {
@@ -113,15 +111,15 @@ int GSMUtils::gsmReadLineInteger(int templateSize)
   int res = 0;
   for (byte i = 0; i < (gsm_rx_buf_size-templateSize); i++) {
     char c = gsm_rx_buf[gsm_rx_buf_size-1-i];
-    //LOG.print('['); LOG.print(c); LOG.print('-');
+    //_debug('['); _debug(c); _debug('-');
     if (c < '0' || c > '9') {
       return -1;
     }
     byte d = (byte)c - (byte)'0';
-    //LOG.print(d); LOG.print('-');
+    //_debug(d); _debug('-');
     int decPow = 1; for (int j = 0; j < i; j++) decPow *= 10;
     res += decPow * d;
-    //LOG.print(decPow); LOG.print(']');
+    //_debug(decPow); _debugln(']');
   }
   return res;
 }

@@ -3,6 +3,7 @@
 
 #include "Arduino.h"
 #include <Stream.h>
+#include <VMMiscUtils.h>
 #include "GSMAbstrProcessor.h"
 #include "Common.h"
 #include "GSMUtils.h"
@@ -11,7 +12,7 @@ class GSMInitializeProcessor : public GSMAbstractProcessor
 {
   public:
     enum State {ZERO = 0, S1, S2, S3, S4, S5, WAITING_FOR_AT_ECHO, WAITING_FOR_OK_AFTER_AT_ECHO, RECEIVED_AT_AND_OK, WAITING_FOR_SMS_READY_REPORT, SUCCESS, ERROR};
-    GSMInitializeProcessor(byte gsmModuleResetPin, GSMUtils* gsmUtils, Stream* logComm);
+    GSMInitializeProcessor(byte gsmModuleResetPin, GSMUtils* gsmUtils);
 
     bool startGSMInitialization();
 
@@ -26,7 +27,6 @@ class GSMInitializeProcessor : public GSMAbstractProcessor
   private:
     byte gsmModuleResetPin;
     GSMUtils* gsmUtils;
-    Stream* LOG;
 
     State _state = State::ZERO;
 

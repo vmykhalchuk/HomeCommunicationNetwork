@@ -3,6 +3,7 @@
 
 #include "Arduino.h"
 #include <Stream.h>
+#include <VMMiscUtils.h>
 #include "GSMAbstrProcessor.h"
 #include "Common.h"
 #include "GSMUtils.h"
@@ -12,7 +13,7 @@ class GSMGetTimeProcessor : public GSMAbstractProcessor
   public:
     enum State { ZERO = 0, SendCOPS_2, SendCOPS_2__WAITING_OK, SendCTZU_1, SendCTZU_1__WAITING_OK, SendCOPS_0, SendCOPS_0__WAITING_OK, WAITING_CTZU, SUCCESS, ERROR };
     
-    GSMGetTimeProcessor(GSMUtils* gsmUtils, Stream* logComm);
+    GSMGetTimeProcessor(GSMUtils* gsmUtils);
 
     bool retrieveTimeFromNetwork(); // start time retrieval procedure (false if cannot start due to some error!)
 
@@ -26,7 +27,6 @@ class GSMGetTimeProcessor : public GSMAbstractProcessor
     bool gsmLineReceivedHandler(byte gsmLineReceived, char* lineStr, int lineSize); 
   private:
     GSMUtils* gsmUtils;
-    Stream* LOG;
     State _state = State::ZERO;
 
     void _timerHandler();

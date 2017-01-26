@@ -4,6 +4,7 @@
 #include "Arduino.h"
 #include "Common.h"
 #include <Stream.h>
+#include <VMMiscUtils.h>
 
 #define CR '\x0D' // CR; CR+LF; LF
 #define LF '\x0A'
@@ -20,7 +21,7 @@ const char GSM_CTZU[] = {'+', 'C', 'T', 'Z', 'U', ':', ' ', '"'}; // +CTZU: "15/
 class GSMUtils
 {
   public:
-    GSMUtils(Stream* gsmComm, Stream* logComm);
+    GSMUtils(Stream* gsmComm);
     void _serialEvent();
     void resetGsmRxChannel();
     void resetGsmRxBufAfterLineRead();
@@ -31,7 +32,6 @@ class GSMUtils
     Stream* getGsmComm() {return gsmComm;}
   private:
     Stream* gsmComm;
-    Stream* logComm;
     char gsm_rx_buf[GSM_RX_BUF_SIZE];
     byte gsm_rx_buf_size;
     bool gsm_rx_buf_full_line = false;

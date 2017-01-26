@@ -1,10 +1,9 @@
 #include "Arduino.h"
 #include "WDTHandler.h"
 
-WDTHandler::WDTHandler(volatile byte* radioTransmissionBuf, Stream* logComm)
+WDTHandler::WDTHandler(volatile byte* radioTransmissionBuf)
 {
   this->radioTransmissionBuf = radioTransmissionBuf;
-  this->LOG = logComm;
   
   for (byte i = 0; i < sizeof(BANKA_IDS); i++)
   {
@@ -32,7 +31,7 @@ void WDTHandler::resetBankaState(byte bankaId)
 
 void WDTHandler::wdtMinuteEvent()
 {
-  LOG->print('W');
+  _print('W'); _print_flush();
   for (byte i = 0; i < sizeof(BANKA_IDS); i++)
   {
     if (banka_states[i].outOfReach > 0)
