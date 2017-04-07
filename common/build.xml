@@ -8,6 +8,7 @@
   </target>
   
   <target name="deploy" depends="dirs.check" if="arduino.lib.dir.exists">
+    <!-- Deploy common libs -->
     <delete dir="${arduino.lib.dir}/HomeCommunicationNetworkLib" />
 	<copy todir="${arduino.lib.dir}/HomeCommunicationNetworkLib">
       <fileset dir="HomeCommunicationNetworkLib"/>
@@ -27,6 +28,11 @@
     <delete dir="${arduino.lib.dir}/Adafruit_Sensor" />
 	<copy todir="${arduino.lib.dir}/Adafruit_Sensor">
       <fileset dir="ext/Adafruit_Sensor"/>
+	</copy>
+
+    <delete dir="${arduino.lib.dir}/ethercard-master" />
+	<copy todir="${arduino.lib.dir}/ethercard-master">
+      <fileset dir="ext/ethercard-master"/>
 	</copy>
 	
 	<echo>Succeeded!</echo>
