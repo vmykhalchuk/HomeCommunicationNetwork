@@ -35,7 +35,17 @@
       <fileset dir="ext/ethercard-master"/>
 	</copy>
 	
-	<echo>Succeeded!</echo>
+    <delete dir="${arduino.lib.dir}/RF24" />
+	<copy todir="${arduino.lib.dir}/RF24">
+      <fileset dir="ext/RF24"/>
+	</copy>
+	
+	<echo></echo>
+	<echo></echo>
+	<echo></echo>
+	<echo>*** Succeeded! ***</echo>
+	<echo>*** Succeeded! ***</echo>
+	<echo>*** Succeeded! ***</echo>
   </target>
   
   <target name="dirs.check">
