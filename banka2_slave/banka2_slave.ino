@@ -402,7 +402,7 @@ bool _transmitData(byte type)
   byte transmission[11];
   // fill in data from structure
   transmission[0] = BANKA_DEV_ID;
-  transmission[1] = type;
+  transmission[1] = type | 0x10; // 0x10 - version 1 of the protocol; 0x20 - version 2 ... etc; low digit is used for type
   transmission[2] = _rneD.transmissionId;
   transmission[3] = _rneD.lastFailed;
   transmission[4] = _rneD.wdtOverruns;

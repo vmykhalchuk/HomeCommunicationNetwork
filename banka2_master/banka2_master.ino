@@ -161,7 +161,8 @@ void processRadioTransmission_debug()
 {
   _debugln();
   _debug(" ID:"); _debugF(transmission[0], HEX);// Banka(R) ID
-  _debug(" T:");  _debugF(transmission[1], HEX);// 0- normal; 1- startup; 2- wdt overrun transmission
+  _debug(" V:");  _debugF(transmission[1]&0xF0 >> 4, HEX);// protocol version (1, 2, .. 0xF)
+  _debug(" T:");  _debugF(transmission[1]&0x0F, HEX);// 0- normal; 1- startup; 2- wdt overrun transmission
   _debug(" C:");  _debugF(transmission[2], HEX);// Communication No
   _debug(" F:");  _debugF(transmission[3], HEX);// Failed attempts to deliver this communication
   _debug(" W:");  _debugF(transmission[4], HEX);// WDT overruns

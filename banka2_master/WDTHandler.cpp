@@ -61,11 +61,12 @@ void WDTHandler::radioTxReceivedForBanka(byte bankaId)
   if (digSensors)
     { alarm = true; banka_states[bankaNo].digSensors = true; }
 
-  volatile bool deviceResetFlag = (*(radioTransmissionBuf+1) == 1);
+  byte protocolVersionAndCommunicationType = *(radioTransmissionBuf+1);
+  volatile bool deviceResetFlag = (protocolVersionAndCommunicationType&0xF) == 1;
   if (deviceResetFlag)
     { alarm = true; banka_states[bankaNo].deviceResetFlag = true; }
 
-  volatile bool wdtOverrunFlag = (*(radioTransmissionBuf+1) == 2);
+  volatile bool wdtOverrunFlag = (protocolVersionAndCommunicationType&0xF) == 2;
   if (wdtOverrunFlag)
     { alarm = true; banka_states[bankaNo].wdtOverrunFlag = true; }
 
