@@ -3,14 +3,17 @@
 
 #include "Arduino.h"
 #include <Stream.h>
+#ifdef _PROJECT_ENABLE_DEBUG
+  #define SERIAL_DEBUG Serial
+#endif
 #include <VMMiscUtils.h>
 
 const byte BANKA_IDS[] = { 0x11, 0x12 };
 #define SEND_NEXT_SMS_DELAY_MINUTES 30
 #define MAXIMUM_NO_TRANSMISSION_MINUTES 5 // minimum 4 minutes, maximum 5 minutes
 
-#define MAG_LEVEL_TRESHOLD 3
-#define LIGHT_LEVEL_TRESHOLD 2
+#define MAG_LEVEL_TRESHOLD 3 // 1..10
+#define LIGHT_LEVEL_TRESHOLD 20 // 0..255
 
 struct BankaState
 {

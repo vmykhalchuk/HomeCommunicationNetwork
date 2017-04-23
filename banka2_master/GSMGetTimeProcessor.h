@@ -3,10 +3,15 @@
 
 #include "Arduino.h"
 #include <Stream.h>
+#ifdef _PROJECT_ENABLE_DEBUG
+  #define SERIAL_DEBUG Serial
+#endif
 #include <VMMiscUtils.h>
 #include "GSMAbstrProcessor.h"
 #include "Common.h"
 #include "GSMUtils.h"
+
+#define GSMGetTimeProcessor_DISABLED // comment it in order to enable this functionality
 
 class GSMGetTimeProcessor : public GSMAbstractProcessor
 {

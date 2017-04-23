@@ -3,6 +3,9 @@
 
 #include "Arduino.h"
 #include <Stream.h>
+#ifdef _PROJECT_ENABLE_DEBUG
+  #define SERIAL_DEBUG Serial
+#endif
 #include <VMMiscUtils.h>
 #include "GSMAbstrProcessor.h"
 #include "Common.h"

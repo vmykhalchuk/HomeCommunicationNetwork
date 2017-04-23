@@ -4,6 +4,9 @@
 #include "Arduino.h"
 #include "Common.h"
 #include <Stream.h>
+#ifdef _PROJECT_ENABLE_DEBUG
+  #define SERIAL_DEBUG Serial
+#endif
 #include <VMMiscUtils.h>
 
 #define CR '\x0D' // CR; CR+LF; LF

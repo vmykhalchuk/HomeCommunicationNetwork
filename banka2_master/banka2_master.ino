@@ -1,8 +1,7 @@
 /**
  * DEFINE BEFORE UPLOAD :: START
  */
-#define SERIAL_OUTPUT Serial
-#define SERIAL_DEBUG Serial
+#define _PROJECT_ENABLE_DEBUG
 /**
  * DEFINE BEFORE UPLOAD :: END
  */
@@ -19,6 +18,10 @@
 // This is in VMUtils library!
 #include <ADCUtils.h>
 #include <WDTUtils.h>
+//#define SERIAL_OUTPUT Serial
+#ifdef _PROJECT_ENABLE_DEBUG
+  #define SERIAL_DEBUG Serial
+#endif
 #include <VMMiscUtils.h>
 
 #include <HomeCommNetworkCommon.h>

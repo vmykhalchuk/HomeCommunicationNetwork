@@ -8,6 +8,9 @@ GSMGetTimeProcessor::GSMGetTimeProcessor(GSMUtils* gsmUtils)
 
 bool GSMGetTimeProcessor::retrieveTimeFromNetwork()
 {
+  #ifdef GSMGetTimeProcessor_DISABLED
+    return true;
+  #endif
   if (_state != State::ZERO && _state != State::ERROR && _state != State::SUCCESS)
   {
     return false;
@@ -18,6 +21,10 @@ bool GSMGetTimeProcessor::retrieveTimeFromNetwork()
 
 GSMGetTimeProcessor::State GSMGetTimeProcessor::processState()
 {
+  #ifdef GSMGetTimeProcessor_DISABLED
+    return State::SUCCESS;
+  #endif
+  
   /* D - Device; M - GSM Module; (remember that M will also Echo back all our comands)
 =-=-=-= PuTYY =-=-=-=
 D>AT+COPS=2

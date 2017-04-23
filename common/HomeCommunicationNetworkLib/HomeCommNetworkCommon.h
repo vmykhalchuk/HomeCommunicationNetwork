@@ -24,7 +24,7 @@ boolean setupRadio(RF24& radio)
 
   radio.setPALevel(RF24_PA_MAX); // RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH and RF24_PA_MAX
   radio.setDataRate(RF24_250KBPS); // (default is RF24_1MBPS)
-  radio.setChannel(125); // 118 = 2.518 Ghz - Above most Wifi Channels (default is 76)
+  radio.setChannel(125); // 0-125; 118 = 2.518 Ghz - Above most Wifi Channels (default is 76)
   radio.setCRCLength(RF24_CRC_16); //(default is RF24_CRC_16)
 
   return true;
