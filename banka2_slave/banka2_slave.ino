@@ -18,9 +18,9 @@
 /**
  * Board ID 0x12 pinout:
  * 
- *  | GND blue  <=> GND |TTL
- * B| RXD red   <=> TXD |RS-232
- * O| TXD brown <=> RXD |(USB)
+ *  | GND blue   <=> GND |TTL
+ * B| RXD brown  <=> TXD |RS-232
+ * O| TXD red    <=> RXD |(USB)
  * A|
  * R| GND brown <=> "-" buzzer
  * D|  D5 red   <=> "+" buzzer
@@ -31,8 +31,8 @@
  * DEFINE BEFORE UPLOAD :: START
  */
 #define SERIAL_DEBUG Serial
-static const byte BANKA_DEV_ID = 0x12; // ID of this Banka(R)
-const byte zoomerPin = 5; // cannot be 13 since radio is using it!
+static const byte BANKA_DEV_ID = 0x11; // ID of this Banka(R)
+const byte zoomerPin = 5; // cannot be 13 (Arduino LED) since radio is using it!
 const byte INTERRUPT_PIN_A = 2;
 const byte INTERRUPT_PIN_B = 3;
 const byte LIGHT_SENSOR_PIN = A3; // (pin #26 of ATMega328P)
@@ -59,6 +59,8 @@ const byte LIGHT_SENSOR_PIN = A3; // (pin #26 of ATMega328P)
 #include <VMMiscUtils.h>
 
 #include <HomeCommNetworkCommon.h>
+
+const byte addressSlave[6] = {'S', 'B', 'a', 'n', BANKA_DEV_ID};
 
 /**
  * This system is waking up once a tick and performs actions as fast as possible to go sleep again.
@@ -196,6 +198,7 @@ void setup()
       wdt_reset();
     }
   }
+  radio.openReadingPipe(1, addressSlave);
   radio.openWritingPipe(addressMaster);
 
   mag.begin();
@@ -399,7 +402,7 @@ bool _transmitData(byte type)
 {
   putRadioUp(radio);
   wdt_reset();
-  byte transmission[11];
+  byte transmission[32];
   // fill in data from structure
   transmission[0] = BANKA_DEV_ID;
   transmission[1] = type | 0x10; // 0x10 - version 1 of the protocol; 0x20 - version 2 ... etc; low digit is used for type
@@ -412,6 +415,10 @@ bool _transmitData(byte type)
   transmission[8] = _rneD.portBData;
   transmission[9] = batteryVoltageHighByte;
   transmission[10] = batteryVoltageLowByte;
+  for (byte i = 11; i < 32; i++)
+  {
+    transmission[i] = 0;
+  }
   bool txSucceeded = radio.write(&transmission, sizeof(transmission));
   wdt_reset();
   { // notify of send status

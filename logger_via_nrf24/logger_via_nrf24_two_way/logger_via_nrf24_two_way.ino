@@ -26,6 +26,8 @@ boolean setupRadio(RF24& radio)
   radio.setChannel(LOGGER_CHANNEL); // 118 = 2.518 Ghz - Above most Wifi Channels (default is 76)
   radio.setCRCLength(RF24_CRC_16); //(default is RF24_CRC_16)
 
+  radio.setRetries(3, 3);
+
   return true;
 }
 
@@ -60,6 +62,7 @@ byte transmission[32];
 void transmit()
 {
   radio.stopListening();
+  radio.flush_tx();
   bool succ = radio.write(&transmission, sizeof(transmission));
   radio.startListening();
 }
