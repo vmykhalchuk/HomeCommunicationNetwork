@@ -1,0 +1,30 @@
+#include "Arduino.h"
+#include "VProtocolSenderHelper.h"
+
+VProtocolSenderHelper::VProtocolSenderHelper(RF24* radio, VProtocolSenderHelperCallback* callback)
+{
+  this->radio = radio;
+  this->callback = callback;
+  this->reset();
+}
+
+void VProtocolSenderHelper::reset()
+{
+  this->counter = 0;
+  this->retryAttempt = 0;
+  this->lastSendPacketFailed = false;
+}
+
+void VProtocolSenderHelper::sendPacket()
+{
+  if (!lastSendPacketFailed)
+  {
+    callback->latchData(&this->dataLatched);
+  }
+  else
+  {
+    callback->peekData(&this->dataPeeked);
+  }
+  
+  
+}

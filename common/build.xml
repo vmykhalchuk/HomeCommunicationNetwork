@@ -53,6 +53,11 @@
 	<copy todir="${arduino.lib.dir}/RF24">
       <fileset dir="ext/RF24"/>
 	</copy>
+
+    <delete dir="${arduino.lib.dir}/Sim800l" />
+	<copy todir="${arduino.lib.dir}/Sim800l">
+      <fileset dir="ext/Sim800l"/>
+	</copy>
   </target>
   
   <target name="deploy-hardware" depends="dirs.check" if="arduino.lib.dir.exists">

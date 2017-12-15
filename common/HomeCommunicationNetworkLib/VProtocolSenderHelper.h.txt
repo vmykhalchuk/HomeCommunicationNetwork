@@ -1,0 +1,35 @@
+#ifndef VProtocolSenderHelper_h
+#define VProtocolSenderHelper_h
+
+// Read VProtocolHelpers.txt
+
+#include "Arduino.h"
+
+class VProtocolSenderHelper
+{
+  public:
+    VProtocolSenderHelper(RF24* radio, VProtocolSenderHelperCallback* callback);
+    void reset();
+    void sendPacket();
+  private:
+    RF24* radio;
+    VProtocolSenderHelperCallback* callback;
+    unsigned int counter = 0;
+	unsigned int retryAttempt = 0;
+	bool lastSendPacketFailed = false;
+	byte dataLatched[10];
+	byte dataPeeked[10];
+};
+
+class VProtocolSenderHelperCallback
+{
+  public:
+    // Latch data from changes (will start new data accumulation)
+    // dataBuf is an array of 10 bytes
+    virtual void latchData(byte* dataBuf) = 0;
+    // Peek data and keep accumulating it
+    // dataBuf is an array of 10 bytes
+    virtual void peekData(byte* dataBuf) = 0;
+};
+
+#endif

@@ -31,7 +31,7 @@
  * DEFINE BEFORE UPLOAD :: START
  */
 #define SERIAL_DEBUG Serial
-static const byte BANKA_DEV_ID = 0x11; // ID of this Banka(R)
+static const byte BANKA_NO = 1; // from 1 to 5
 const byte zoomerPin = 5; // cannot be 13 (Arduino LED) since radio is using it!
 const byte INTERRUPT_PIN_A = 2;
 const byte INTERRUPT_PIN_B = 3;
@@ -59,7 +59,8 @@ const byte LIGHT_SENSOR_PIN = A3; // (pin #26 of ATMega328P)
 
 #include <HomeCommNetworkCommon.h>
 
-const byte addressSlave[6] = {'S', 'B', 'a', 'n', BANKA_DEV_ID};
+static const byte BANKA_DEV_ID = (byte) (rAddress[BANKA_NO] & 0xFF); // ID of this Banka(R)
+//const byte addressSlave[6] = {'S', 'B', 'a', 'n', BANKA_DEV_ID};
 
 /**
  * This system is waking up once a tick and performs actions as fast as possible to go sleep again.
@@ -160,6 +161,8 @@ ISR(WDT_vect)
   }
 }
 
+const uint64_t PTXpipe = rAddress[BANKA_NO];
+
 void setup()
 {
   Serial.begin(57600);
@@ -197,8 +200,11 @@ void setup()
       wdt_reset();
     }
   }
-  radio.openReadingPipe(1, addressSlave);
-  radio.openWritingPipe(addressMaster);
+  radio.openReadingPipe(0,PTXpipe);  //open reading or receive pipe
+  radio.stopListening(); //go into transmit mode
+  radio.openWritingPipe(PTXpipe);        //open writing or transmit pipe
+  //radio.openReadingPipe(1, addressSlave);
+  //radio.openWritingPipe(addressMaster);
 
   mag.begin();
 

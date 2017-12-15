@@ -1,10 +1,13 @@
 #ifndef HomeCommNetworkCommon_h
 #define HomeCommNetworkCommon_h
 
-const byte addressMaster[6] = "MBank";
-//const byte addressSlave[6] = "SBank";
-const byte addressRepeater1[6] = "1Bank";
-const byte addressRepeater2[6] = "2Bank";
+//Create up to 6 pipe addresses P0 - P5;  the "LL" is for LongLong type
+const uint64_t rAddress[] = {0x7878787878LL, 0xB3B4B5B6F1LL, 0xB3B4B5B6CDLL, 0xB3B4B5B6A3LL, 0xB3B4B5B60FLL, 0xB3B4B5B605LL };
+
+//const byte addressMaster[6] = "MBank";
+////const byte addressSlave[6] = "SBank";
+//const byte addressRepeater1[6] = "1Bank";
+//const byte addressRepeater2[6] = "2Bank";
 
 //enum HCNDevice
 //{

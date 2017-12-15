@@ -1,0 +1,6 @@
+WHY THE FUCK WOULD WE NEED THIS FUNCTIONALITY
+WHATS A DIFFERENCE BETWEEN IT AND STANDARD RETRY MECHANISM???
+
+1) It would guarantee data delivery even if no ACK has been properly returned
+2) It would retry after many attempts failed, and will be doing it in controllable way (meaning easy on battery)
+3) Will provide most recent data possible (in ordinary setup when ACK failed to be received - but Sender still tries to send old data)

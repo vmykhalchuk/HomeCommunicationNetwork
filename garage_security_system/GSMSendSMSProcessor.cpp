@@ -1,10 +1,9 @@
 #include "Arduino.h"
 #include "GSMSendSMSProcessor.h"
 
-GSMSendSMSProcessor::GSMSendSMSProcessor(GSMUtils* gsmUtils, WDTHandler* wdtHandler)
+GSMSendSMSProcessor::GSMSendSMSProcessor(GSMUtils* gsmUtils)
 {
   this->gsmUtils = gsmUtils;
-  this->wdtHandler = wdtHandler;
 }
 
 bool GSMSendSMSProcessor::sendSMS(byte senderNo, SMSContent* _smsContent)
@@ -70,35 +69,9 @@ GSMSendSMSProcessor::State GSMSendSMSProcessor::processState()
   else if (_state == State::SEND_TEXT_OF_SMS)
   { // write message + Ctrl+Z
     Stream* gsmComm = gsmUtils->getGsmComm();
-    if (_smsContent->_type == 0)
-    {
-      gsmComm->print("ID: "); gsmComm->print(_smsContent->devId, HEX); gsmComm->print(", ");
-      if (_smsContent->magLevel > 0) { gsmComm->print("MAG: "); gsmComm->print(_smsContent->magLevel); gsmComm->print(", "); }
-      if (_smsContent->lightLevel > 0) { gsmComm->print("LIG: "); gsmComm->print(_smsContent->lightLevel); gsmComm->print(", "); }
-      if (_smsContent->digSensors) { gsmComm->print("AorB, "); }
-      if (_smsContent->deviceResetFlag) { gsmComm->print("Reset/PowerUp, "); }
-      if (_smsContent->wdtOverrunFlag) { gsmComm->print("WatchDog!, "); }
-      if (_smsContent->outOfReach) { gsmComm->print("Missing!, "); }
-      if (_smsContent->wdtOverruns > 0) { gsmComm->print("OV: "); gsmComm->print(_smsContent->wdtOverruns); }
-    }
-    else if (_smsContent->_type == 1)
-    {
-      gsmComm->println(F("ONLINE!"));
-      /*for (int i = 0; i < _smsContent->failuresArrSize; i++)
-      {
-        gsmComm->print(" 0x"); gsmComm->print(*(_smsContent->failuresArr+i), HEX);
-      }*/
-      for (int i = 0; i < sizeof(BANKA_IDS); i++)
-      {
-        uint8_t bankaId = BANKA_IDS[i];
-        BankaState* bankaState = wdtHandler->getBankaState(bankaId);
-        gsmComm->print("ID: 0x"); gsmComm->print(bankaId, HEX);
-        gsmComm->print(" f:0x"); gsmComm->print(*(_smsContent->failuresArr+i), HEX);
-        gsmComm->print(" v:"); gsmComm->print(bankaState->batteryVcc);
-        gsmComm->println();
-      }
-    }
-    gsmComm->print((char)26);
+    gsmComm->println("Test SMS");
+    // FIXME use _smsContent->devId or anything else to write SMS content
+    gsmComm->print((char)26); // Ctrl+Z
     gsmComm->flush();
     
     _state = State::WAIT_FOR_OK_AFTER_SENDING_SMS;
@@ -112,7 +85,7 @@ GSMSendSMSProcessor::State GSMSendSMSProcessor::processState()
   return _state;
 }
 
-bool GSMSendSMSProcessor::gsmLineReceivedHandler(byte gsmLineReceived, char* lineStr, int lineSize)
+bool GSMSendSMSProcessor::gsmLineReceivedHandler(byte gsmLineReceived, __attribute__((unused)) char* lineStr, __attribute__((unused)) int lineSize)
 {
   if (gsmLineReceived == GSM_LINE_NONE || gsmLineReceived == GSM_LINE_EMPTY)
   {

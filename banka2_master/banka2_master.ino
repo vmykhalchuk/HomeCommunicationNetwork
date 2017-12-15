@@ -89,7 +89,14 @@ ISR(WDT_vect) // called once a second roughly
 void setup()
 {
   setupRadio(radio);
-  radio.openReadingPipe(1, addressMaster);
+  //radio.openReadingPipe(1, addressMaster);
+  // Open up to six pipes for PRX to receive data
+  radio.openReadingPipe(0,rAddress[0]);
+  radio.openReadingPipe(1,rAddress[1]);
+  radio.openReadingPipe(2,rAddress[2]);
+  radio.openReadingPipe(3,rAddress[3]);
+  radio.openReadingPipe(4,rAddress[4]);
+  radio.openReadingPipe(5,rAddress[5]);
 
   bankaTransmissionTopRetryFailures_timer = bankaTransmissionTopRetryFailures_TIMER_MINUTES;
   for (byte i = 0; i < sizeof(bankaTransmissionTopRetryFailures); i++)
@@ -216,7 +223,8 @@ void loop()
   }
 
   // radio life loop
-  if (!readingRadioData && radio.available())
+  byte pipeNum = 0; //variable to hold which reading pipe sent data
+  if (!readingRadioData && radio.available(&pipeNum))
   {
     radio.readUnblockedStart((void*)(&transmission), sizeof(transmission));
     readingRadioData = true;
