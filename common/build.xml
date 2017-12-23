@@ -1,10 +1,24 @@
-<project default="deploy.paused">
+<project default="main">
 
   <property environment="env"/>
-  <property name="arduino.lib.dir" location="${env.USERPROFILE}/Documents/Arduino/libraries" />
+  <property name="arduino.docs.dir" location="${env.USERPROFILE}/Documents/Arduino/" />
+  <property name="arduino.lib.dir" location="${arduino.docs.dir}/libraries/" />
 
-  <target name="deploy.paused" depends="deploy">
+  <target name="main" description="Main target" depends="deploy-hardware, deploy">
+	<echo></echo>
+	<echo></echo>
+	<echo></echo>
+	<echo>*** Succeeded! ***</echo>
+	<echo>*** Succeeded! ***</echo>
+	<echo>*** Succeeded! ***</echo>
 	<input>Press Enter to exit...</input>
+  </target>
+  
+  <target name="dirs.check">
+    <condition property="arduino.lib.dir.exists">
+      <available file="${arduino.lib.dir}" type="dir"/>
+    </condition>
+	<echo>Dir '${arduino.lib.dir}' exists: ${arduino.lib.dir.exists}</echo>
   </target>
   
   <target name="deploy" depends="dirs.check" if="arduino.lib.dir.exists">
@@ -39,20 +53,13 @@
 	<copy todir="${arduino.lib.dir}/RF24">
       <fileset dir="ext/RF24"/>
 	</copy>
-	
-	<echo></echo>
-	<echo></echo>
-	<echo></echo>
-	<echo>*** Succeeded! ***</echo>
-	<echo>*** Succeeded! ***</echo>
-	<echo>*** Succeeded! ***</echo>
   </target>
   
-  <target name="dirs.check">
-    <condition property="arduino.lib.dir.exists">
-      <available file="${arduino.lib.dir}" type="dir"/>
-    </condition>
-	<echo>Dir '${arduino.lib.dir}' exists: ${arduino.lib.dir.exists}</echo>
+  <target name="deploy-hardware" depends="dirs.check" if="arduino.lib.dir.exists">
+    <delete dir="${arduino.docs.dir}/hardware" />
+	<copy todir="${arduino.docs.dir}/hardware">
+      <fileset dir="ext-hardware"/>
+	</copy>
   </target>
 
 </project>
