@@ -51,12 +51,11 @@ const byte LIGHT_SENSOR_PIN = A3; // (pin #26 of ATMega328P)
 #include <Adafruit_Sensor.h>
 #include <Adafruit_HMC5883_U.h>
 
-// This is in VMUtils library!
-#include <ADCUtils.h>
-#include <WDTUtils.h>
+#include <VMUtils_ADC.h>
+#include <VMUtils_WDT.h>
 
 #define SERIAL_OUTPUT Serial
-#include <VMMiscUtils.h>
+#include <VMUtils_Misc.h>
 
 #include <HomeCommNetworkCommon.h>
 
@@ -79,7 +78,7 @@ RF24 radio(7,8);
 uint8_t batteryVoltageLowByte = 0, batteryVoltageHighByte = 0;
 void batteryVoltageRead()
 {
-  uint16_t vcc = ADCUtils::readVccAsUint();
+  uint16_t vcc = VMUtils_ADC::readVccAsUint();
   batteryVoltageHighByte = vcc>>8;
   batteryVoltageLowByte = vcc&0x00FF;
   #ifdef SERIAL_DEBUG
@@ -182,7 +181,7 @@ void setup()
   digitalWrite(INTERRUPT_PIN_B, HIGH);
   digitalWrite(LIGHT_SENSOR_PIN, HIGH); // pull it up for light sensor
   
-  WDTUtils::setupWdt(true, WDTUtils::PRSCL::_4s); // must conform to TICK_SECONDS
+  VMUtils_WDT::setupWdt(true, VMUtils_WDT::PRSCL::_4s); // must conform to TICK_SECONDS
 
   if (!setupRadio(radio)) {
     while(true) {

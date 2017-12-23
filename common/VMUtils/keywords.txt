@@ -6,16 +6,16 @@
 # Class (KEYWORD1)
 #######################################
 
-WDTUtils	KEYWORD1
+VMUtils_WDT	KEYWORD1
 NullSerial KEYWORD1
-ADCUtils KEYWORD1
-VMMiscUtils KEYWORD1
+VMUtils_ADC KEYWORD1
+VMUtils_Misc KEYWORD1
 
 #######################################
 # Datatypes (KEYWORD2)
 #######################################
 
-WDTUtils::PRSCL	KEYWORD2
+VMUtils_WDT::PRSCL	KEYWORD2
 
 #######################################
 # Methods and Functions (KEYWORD2)

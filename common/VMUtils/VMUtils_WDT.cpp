@@ -1,7 +1,7 @@
 #include "Arduino.h"
-#include "WDTUtils.h"
+#include "VMUtils_WDT.h"
 
-void WDTUtils::setupWdt(boolean enableInterrupt, PRSCL prescaler)
+void VMUtils_WDT::setupWdt(boolean enableInterrupt, PRSCL prescaler)
 {
   byte wdtcsrValue = enableInterrupt ? 1<<WDIE : 0;
   wdtcsrValue |= (prescaler & 1) ? 1<<WDP0 : 0;

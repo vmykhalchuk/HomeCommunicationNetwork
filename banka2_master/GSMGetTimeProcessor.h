@@ -6,7 +6,7 @@
 #ifdef _PROJECT_ENABLE_DEBUG
   #define SERIAL_DEBUG Serial
 #endif
-#include <VMMiscUtils.h>
+#include <VMUtils_Misc.h>
 #include "GSMAbstrProcessor.h"
 #include "Common.h"
 #include "GSMUtils.h"

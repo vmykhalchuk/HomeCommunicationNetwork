@@ -1,9 +1,9 @@
-#ifndef ADCUtils_h
-#define ADCUtils_h
+#ifndef VMUtils_ADC_h
+#define VMUtils_ADC_h
 
 #include "Arduino.h"
 
-class ADCUtils
+class VMUtils_ADC
 {
   private:
     static void _readVcc();

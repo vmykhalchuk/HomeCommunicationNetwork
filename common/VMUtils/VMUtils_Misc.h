@@ -1,5 +1,5 @@
-#ifndef VMMiscUtils_h
-#define VMMiscUtils_h
+#ifndef VMUtils_Misc_h
+#define VMUtils_Misc_h
 
 #include "Arduino.h"
 

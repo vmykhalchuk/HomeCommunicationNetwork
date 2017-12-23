@@ -6,7 +6,7 @@
 #ifdef _PROJECT_ENABLE_DEBUG
   #define SERIAL_DEBUG Serial
 #endif
-#include <VMMiscUtils.h>
+#include <VMUtils_Misc.h>
 
 const byte BANKA_IDS[] = { 0x11, 0x12 };
 #define SEND_NEXT_SMS_DELAY_MINUTES 30

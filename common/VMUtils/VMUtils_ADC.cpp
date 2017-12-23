@@ -1,7 +1,7 @@
 #include "Arduino.h"
-#include "ADCUtils.h"
+#include "VMUtils_ADC.h"
 
-void ADCUtils::_readVcc()
+void VMUtils_ADC::_readVcc()
 {
   ADCSRA =  bit (ADEN);   // turn ADC on
   ADCSRA |= bit (ADPS0) |  bit (ADPS1) | bit (ADPS2);  // Prescaler of 128
@@ -16,7 +16,7 @@ void ADCUtils::_readVcc()
   // value is now available in ADC
 }
 
-float ADCUtils::readVcc()
+float VMUtils_ADC::readVcc()
 {
   _readVcc();
   return 1.1 / float (ADC + 0.5) * 1024.0;
@@ -28,13 +28,13 @@ float ADCUtils::readVcc()
   // 0x11 shows 4.37 for 4.??(compact multimeter) or 4.27(big multimeter)
 }
 
-uint16_t ADCUtils::readVccAsUint()
+uint16_t VMUtils_ADC::readVccAsUint()
 {
   _readVcc();
   return ADC;
 }
 
-/*void ADCUtils::readVcc(uint8_t& lowByte, uint8_t& highByte)
+/*void VMUtils_ADC::readVcc(uint8_t& lowByte, uint8_t& highByte)
 {
   readVccInt();
   uint16_t _adc = ADC;

@@ -2,7 +2,7 @@
 // First define where to send output and debug information to
 #define SERIAL_OUTPUT Serial
 #define SERIAL_DEBUG Serial
-#include <VMMiscUtils.h>
+#include <VMUtils_Misc.h>
 
 void setup()
 {

@@ -15,14 +15,13 @@
 #include <SoftwareSerial.h>
 #include <RF24.h>
 
-// This is in VMUtils library!
-#include <ADCUtils.h>
-#include <WDTUtils.h>
+#include <VMUtils_ADC.h>
+#include <VMUtils_WDT.h>
 //#define SERIAL_OUTPUT Serial
 #ifdef _PROJECT_ENABLE_DEBUG
   #define SERIAL_DEBUG Serial
 #endif
-#include <VMMiscUtils.h>
+#include <VMUtils_Misc.h>
 
 #include <HomeCommNetworkCommon.h>
 
@@ -111,7 +110,7 @@ void setup()
     delay(1000);
   }
 
-  WDTUtils::setupWdt(true, WDTUtils::PRSCL::_1s);
+  VMUtils_WDT::setupWdt(true, VMUtils_WDT::PRSCL::_1s);
 
   _println(F("Initialization complete."));
 //  for (int i = 0; i < 5; i++) {

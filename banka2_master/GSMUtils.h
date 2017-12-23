@@ -7,7 +7,7 @@
 #ifdef _PROJECT_ENABLE_DEBUG
   #define SERIAL_DEBUG Serial
 #endif
-#include <VMMiscUtils.h>
+#include <VMUtils_Misc.h>
 
 #define CR '\x0D' // CR; CR+LF; LF
 #define LF '\x0A'
