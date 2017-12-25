@@ -40,7 +40,7 @@ const byte gsmModuleResetPin = 5;
 RF24 radio(7, 8);
 HomeCommNetworkCommon hommCommNetwork;
 #define BANKA_TRANSMISSION_SIZE 11
-volatile byte transmission[BANKA_TRANSMISSION_SIZE];
+byte transmission[BANKA_TRANSMISSION_SIZE];
 
 SoftwareSerial softSerial(4, 3);
 

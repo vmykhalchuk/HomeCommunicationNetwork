@@ -64,9 +64,10 @@ const byte LIGHT_SENSOR_PIN = A3; // (pin #26 of ATMega328P)
 #include "MiscHelper.h"
 #include "Misc.h"
 
+HomeCommNetworkCommon homeCommNetwork;
 
-const uint64_t PTXpipe = rAddress[BANKA_NO]; // see in HomeCommNetworkCommon
-static const byte BANKA_DEV_ID = (byte) (rAddress[BANKA_NO] & 0xFF); // ID of this Banka(R)
+const uint64_t PTXpipe = homeCommNetwork.rAddress[BANKA_NO]; // see in HomeCommNetworkCommon
+static const byte BANKA_DEV_ID = (byte) (homeCommNetwork.rAddress[BANKA_NO] & 0xFF); // ID of this Banka(R)
 //const byte addressSlave[6] = {'S', 'B', 'a', 'n', BANKA_DEV_ID};
 
 /**
@@ -259,11 +260,18 @@ class VProtocol_DataSender_Impl : public VProtocol_DataSender
 
 void VProtocol_DataSender_Impl::sendData(uint8_t* data, bool& res)
 {
-  putRadioUp(radio);
+  homeCommNetwork.putRadioUp();
   wdt_reset();
   res = radio.write(data, 32);
   wdt_reset();
-  putRadioDown(radio);
+  #ifdef SERIAL_DEBUG
+    bool isAckPayload = radio.isAckPayloadAvailable();
+    byte transmission[32];
+    radio.read((void*)(&transmission), sizeof(transmission));
+    _debug("ACK Payload: "); _debugln(transmission[3]);
+    wdt_reset();
+  #endif
+  homeCommNetwork.putRadioDown();
 }
 
 VProtocol_SenderHelperCallback_Impl vProtocolSenderHelperCallbackImpl;
@@ -300,7 +308,7 @@ void setup()
   
   VMUtils_WDT::setupWdt(true, VMUtils_WDT::PRSCL::_4s); // must conform to TICK_SECONDS
 
-  if (!setupRadio(radio)) {
+  if (!homeCommNetwork.setupRadio(&radio)) {
     while(true) {
       _println("Radio Initialization failed!!!");
       for (int i = 0; i < 3; i++) {
@@ -317,8 +325,8 @@ void setup()
   radio.openReadingPipe(0,PTXpipe);  //open reading or receive pipe
   radio.stopListening(); //go into transmit mode
   radio.openWritingPipe(PTXpipe);        //open writing or transmit pipe
-  //radio.openReadingPipe(1, addressSlave);
-  //radio.openWritingPipe(addressMaster);
+  //radio.openReadingPipe(1, homeCommNetwork.addressSlave);
+  //radio.openWritingPipe(homeCommNetwork.addressMaster);
 
   mag.begin();
 
