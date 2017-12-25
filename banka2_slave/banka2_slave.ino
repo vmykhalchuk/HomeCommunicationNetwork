@@ -45,7 +45,7 @@ const byte LIGHT_SENSOR_PIN = A3; // (pin #26 of ATMega328P)
 #include <avr/power.h>
 #include <avr/wdt.h>
 #include <SPI.h>
-#include "RF24.h"
+#include <RF24.h>
 
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
@@ -74,6 +74,8 @@ Adafruit_HMC5883_Unified mag = Adafruit_HMC5883_Unified(12345);
 
 /* Hardware configuration: Set up nRF24L01 radio on SPI bus plus pins 7 & 8 */
 RF24 radio(7,8);
+
+HomeCommNetworkCommon homeCommNetwork;
 
 uint8_t batteryVoltageLowByte = 0, batteryVoltageHighByte = 0;
 void batteryVoltageRead()
@@ -183,7 +185,7 @@ void setup()
   
   VMUtils_WDT::setupWdt(true, VMUtils_WDT::PRSCL::_4s); // must conform to TICK_SECONDS
 
-  if (!setupRadio(radio)) {
+  if (!homeCommNetwork.setupRadio(&radio)) {
     while(true) {
       _println("Radio Initialization failed!!!");
       for (int i = 0; i < 3; i++) {
@@ -197,8 +199,8 @@ void setup()
       wdt_reset();
     }
   }
-  radio.openReadingPipe(1, addressSlave);
-  radio.openWritingPipe(addressMaster);
+  radio.openReadingPipe(1, homeCommNetwork.addressSlave);
+  radio.openWritingPipe(homeCommNetwork.addressMaster);
 
   mag.begin();
 
@@ -399,7 +401,7 @@ byte _getTreshold(byte lastFailed)
 //        2 - wdt overrun transmission
 bool _transmitData(byte type)
 {
-  putRadioUp(radio);
+  homeCommNetwork.putRadioUp();
   wdt_reset();
   byte transmission[32];
   // fill in data from structure
@@ -437,7 +439,7 @@ bool _transmitData(byte type)
       }
     }
   }
-  putRadioDown(radio);
+  homeCommNetwork.putRadioDown();
   return txSucceeded;
 }
 

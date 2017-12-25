@@ -38,6 +38,7 @@ const byte gsmModuleResetPin = 5;
 /* Hardware configuration:
    Set up nRF24L01 radio on SPI bus (13, ???) plus pins 7 & 8 */
 RF24 radio(7, 8);
+HomeCommNetworkCommon hommCommNetwork;
 #define BANKA_TRANSMISSION_SIZE 11
 volatile byte transmission[BANKA_TRANSMISSION_SIZE];
 
@@ -88,8 +89,8 @@ ISR(WDT_vect) // called once a second roughly
 
 void setup()
 {
-  setupRadio(radio);
-  radio.openReadingPipe(1, addressMaster);
+  hommCommNetwork.setupRadio(&radio);
+  radio.openReadingPipe(1, hommCommNetwork.addressMaster);
 
   bankaTransmissionTopRetryFailures_timer = bankaTransmissionTopRetryFailures_TIMER_MINUTES;
   for (byte i = 0; i < sizeof(bankaTransmissionTopRetryFailures); i++)
