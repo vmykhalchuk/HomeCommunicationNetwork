@@ -20,6 +20,11 @@ bool HomeCommNetworkCommon::setupRadio(RF24* radio) {
   return true;
 }
 
+bool HomeCommNetworkCommon::setupRadio(RF24* radio, bool autoAck) {
+  this->setupRadio(radio);
+  this->radio->setAutoAck(autoAck);
+}
+
 void HomeCommNetworkCommon::putRadioDown() {
   if (!this->isRadioInitialized) return;
   
