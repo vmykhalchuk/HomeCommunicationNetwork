@@ -55,7 +55,7 @@ void processRadioTransmission_debug()
   float bankaVcc = 1.1 / float (bankaVccAdc + 0.5) * 1024.0;
   _debug(" VCC:"); _debug(bankaVcc);// Battery Voltage
   _debugln();
-  _debug("   Historical: -2m-2m-2m-2m-2m-10m-20m-40m-80m-160m-320m-640m-1280m-2560m-");
+  _debug("   Historical: -2m-2m-2m-2m-2m-10m-20m-40m-80m-160m-320m-640m-1280m-2560m-"); _debugln();
   _debug("        Light: -"); for (int i = 0; i < 15; i++) debugPrintPos(&transmission[4], i); _debugln();
   _debug("       Magnet: -"); for (int i = 0; i < 15; i++) debugPrintPos(&transmission[4+8], i); _debugln();
   _debug("        Reset: -"); for (int i = 0; i < 15; i++) debugPrintPos(&transmission[4+16], i); _debugln();

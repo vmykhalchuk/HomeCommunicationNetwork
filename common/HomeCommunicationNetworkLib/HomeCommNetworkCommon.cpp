@@ -21,8 +21,11 @@ bool HomeCommNetworkCommon::setupRadio(RF24* radio) {
 }
 
 bool HomeCommNetworkCommon::setupRadio(RF24* radio, bool autoAck) {
-  this->setupRadio(radio);
-  this->radio->setAutoAck(autoAck);
+  bool res = this->setupRadio(radio);
+  if (res == true) {
+	this->radio->setAutoAck(autoAck);
+  }
+  return res;
 }
 
 void HomeCommNetworkCommon::putRadioDown() {

@@ -88,14 +88,14 @@ HomeCommNetworkCommon homeCommNetwork;
 
 const uint8_t data_buf_size = 20+16+32+128;
 uint8_t data_buf_1[data_buf_size]; // used by light
-uint8_t data_buf_2[data_buf_size]; // used by magnetometer
+//uint8_t data_buf_2[data_buf_size]; // used by magnetometer
 uint8_t data_buf_3[data_buf_size]; // used by reset
 void initDataBuf1and2()
 {
   for (int i = 0; i < data_buf_size; i++)
   {
     data_buf_1[i] = 0;
-    data_buf_2[i] = 0;
+    //data_buf_2[i] = 0;
     data_buf_3[i] = 0;
   }
 }
@@ -153,15 +153,38 @@ uint8_t calculate40mIntervals(uint8_t * data_buf_pointer, uint8_t number) {
   return res;
 }
 
+// 2m - 2m - ... 20 of these ... - 2m - 2m - 2m = 10m - 10m - ... 16 of these ... - 10m - 10m = 20m - 20m ... 32 of these ... - 20m = 40m - 40m - ... 128 of these ... - 40m
+void debugStoredData() {
+  #ifdef SERIAL_DEBUG
+    _debug("Buf_1(Light): "); __debugStoredData(&data_buf_1[0]);
+    //_debug("Buf_2(Magnt): "); __debugStoredData(&data_buf_2[0]);
+    _debug("Buf_3(Reset): "); __debugStoredData(&data_buf_3[0]);
+  #endif
+}
+void __debugStoredData(uint8_t * data_buf_pointer) {
+                            _debug("2m[20]: "); for (int i = 0; i < 20; i++) __debugPrintPoint(*(data_buf_pointer+i)); _debugln();
+  _debug("              "); _debug("10m[16]: "); for (int i = 0; i < 16; i++) __debugPrintPoint(*(data_buf_pointer+20+i)); _debugln();
+  _debug("              "); _debug("20m[32]: "); for (int i = 0; i < 16; i++) __debugPrintPoint(*(data_buf_pointer+20+16+i)); _debugln();
+  _debug("              "); _debug("40m[128]: "); for (int i = 0; i < 16; i++) __debugPrintPoint(*(data_buf_pointer+20+16+32+i)); _debugln();
+}
+
+void __debugPrintPoint(uint8_t z) {
+  if (z > 10) _debug(z / 10) else _debug(' ');
+  _debug(z % 10);
+  _debug('-');
+}
+
 long secondsSinceStart = 0;
 // we must call it every 30seconds
 void registerData(uint8_t data1, uint8_t data2, uint8_t data3)
 {
   secondsSinceStart += 30;
   updateRecent2mIntervalAndShiftWhenNeeded(&data_buf_1[0], data1, secondsSinceStart);
-  updateRecent2mIntervalAndShiftWhenNeeded(&data_buf_2[0], data2, secondsSinceStart);
+  //updateRecent2mIntervalAndShiftWhenNeeded(&data_buf_2[0], data2, secondsSinceStart);
   updateRecent2mIntervalAndShiftWhenNeeded(&data_buf_3[0], data3, secondsSinceStart);
 }
+
+// 2m - 2m - ... 20 of these ... - 2m - 2m - 2m = 10m - 10m - ... 16 of these ... - 10m - 10m = 20m - 20m ... 32 of these ... - 20m = 40m - 40m - ... 128 of these ... - 40m
 
 void updateRecent2mIntervalAndShiftWhenNeeded(uint8_t * data_buf_pointer, uint8_t newData, long secondsSinceStart)
 {
@@ -516,6 +539,45 @@ byte getLightSensorState()
 }
 
 
+void processRadioTransmission_debug(uint8_t* transmission)
+{
+  #ifdef SERIAL_DEBUG
+    _debugln();
+    _debug("Sending data: ");
+    _debug(" ID:"); _debugF(transmission[0], HEX);// Banka(R) ID
+    _debug(" V:");  _debugF(transmission[1]&0xF0 >> 4, HEX);// protocol version (1, 2, .. 0xF)
+    _debug(" T:");  _debugF(transmission[1]&0x0F, HEX);// 0- normal; 1- startup; 2- wdt overrun transmission
+    uint16_t bankaVccAdc = transmission[2]<<8|transmission[3];
+    float bankaVcc = 1.1 / float (bankaVccAdc + 0.5) * 1024.0;
+    _debug(" VCC:"); _debug(bankaVcc);// Battery Voltage
+    _debugln();
+    _debug("   Historical: -2m-2m-2m-2m-2m-10m-20m-40m-80m-160m-320m-640m-1280m-2560m-"); _debugln();
+    _debug("        Light: -"); for (int i = 0; i < 15; i++) debugPrintPos(&transmission[4], i); _debugln();
+    _debug("       Magnet: -"); for (int i = 0; i < 15; i++) debugPrintPos(&transmission[4+8], i); _debugln();
+    _debug("        Reset: -"); for (int i = 0; i < 15; i++) debugPrintPos(&transmission[4+16], i); _debugln();
+    _debugln();
+  #endif
+}
+
+uint8_t debugPrintPos(uint8_t * pointer, int pos) {
+  uint8_t z = *(pointer + pos);
+  if (pos%2 == 0) {
+    // read low bits
+    z &= 0x0f;
+  } else {
+    // read high bits
+    z = z >> 4;
+  }
+
+  if (z > 10) {
+    _debug(z / 10);
+  } else {
+    _debug(' ');
+  }
+  _debug(z % 10);
+  _debug('-');
+}
+
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 /// >> transmission area start!
@@ -527,7 +589,7 @@ void _transmitData(byte type)
 {
   homeCommNetwork.putRadioUp();
   wdt_reset();
-  byte transmission[32];
+  uint8_t transmission[32];
   // fill in data from structure
   transmission[0] = BANKA_DEV_ID;
   transmission[1] = type | 0x20; // 0x10 - version 1 of the protocol; 0x20 - version 2 ... etc; low digit is used for type
@@ -535,9 +597,10 @@ void _transmitData(byte type)
   transmission[3] = batteryVoltageLowByte;
 
   loadToTransmitBuf(&data_buf_1[0], &transmission[4]);   // 8 bytes for light
-  loadToTransmitBuf(&data_buf_2[0], &transmission[4+8]); // 8 bytes for magnetometer
+  //loadToTransmitBuf(&data_buf_2[0], &transmission[4+8]); // 8 bytes for magnetometer
   loadToTransmitBuf(&data_buf_3[0], &transmission[4+16]);// 8 bytes for reset
-  
+
+  processRadioTransmission_debug(&transmission[0]);
   wdt_reset();
   radio.write(&transmission, sizeof(transmission));
   wdt_reset();
@@ -557,7 +620,6 @@ void readBatteryLevel() // is called every TICK_SECONDS(2) seconds
     batteryVoltageRead();
   }
 }
-
 
 int sensorsCheckCounter = 0;
 byte lastMagState = 0;
@@ -588,23 +650,28 @@ void loop()
       sensorsCheckCounter++;
       if (sensorsCheckCounter % 2 == 0) {
         // we check sensors once 4 seconds (2*2)
-        _debug("Data");
-        byte _magState = getMagSensorState();
-        _debug(" m="); _debug(_magState);
-        wdt_reset();
-        byte _lightState = getLightSensorState();
-        _debug(" l="); _debug(_lightState);
-        wdt_reset();
-        byte _intsOnPinA = readInterruptsOnPinA();
-        _debug(" a="); _debug(_intsOnPinA);
-        wdt_reset();
-        byte _intsOnPinB = readInterruptsOnPinB();
-        _debug(" b="); _debug(_intsOnPinB); _debugln();
-        wdt_reset();
+        #ifdef SERIAL_DEBUG
+          _debug("Data");
+          byte _magState = getMagSensorState();
+          _debug(" m="); _debug(_magState);
+          wdt_reset();
+          byte _lightState = getLightSensorState();
+          _debug(" l="); _debug(_lightState);
+          wdt_reset();
+          byte _intsOnPinA = readInterruptsOnPinA();
+          _debug(" a="); _debug(_intsOnPinA);
+          wdt_reset();
+          byte _intsOnPinB = readInterruptsOnPinB();
+          _debug(" b="); _debug(_intsOnPinB); _debugln();
+          wdt_reset();
+          debugStoredData();
+          wdt_reset();
+        #endif
         lastMagState = max(lastMagState, _magState);
         lastLightState = max(lastLightState, _lightState);
         lasIntsOnPinA = max(lasIntsOnPinA, _intsOnPinA);
         lasIntsOnPinB = max(lasIntsOnPinB, _intsOnPinB);
+        wdt_reset();
       }
       if (sensorsCheckCounter % 15 == 0) { // every 30 seconds we call registerData and attempt transmission
         registerData(lastMagState, lastLightState, resetFlag);
