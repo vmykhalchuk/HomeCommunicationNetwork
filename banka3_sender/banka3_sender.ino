@@ -169,19 +169,29 @@ void __debugStoredData(uint8_t * data_buf_pointer) {
 }
 
 void __debugPrintPoint(uint8_t z) {
-  if (z > 10) _debug(z / 10) else _debug(' ');
+  if (z > 10) _debug(z / 10) else _debug('0');
   _debug(z % 10);
   _debug('-');
 }
 
 long secondsSinceStart = 0;
 // we must call it every 30seconds
-void registerData(uint8_t data1, uint8_t data2, uint8_t data3)
+void registerDataEvery30Seconds(uint8_t data1, uint8_t data2, uint8_t data3)
 {
+  #ifdef SERIAL_DEBUG
+    _debug("Stroring(Light): "); _debug(data1);
+    _debug(" Storing(Magnt): "); _debug(data2);
+    _debug(" Storing(Reset): "); _debug(data3);
+    _debugln();
+  #endif
   secondsSinceStart += 30;
   updateRecent2mIntervalAndShiftWhenNeeded(&data_buf_1[0], data1, secondsSinceStart);
   //updateRecent2mIntervalAndShiftWhenNeeded(&data_buf_2[0], data2, secondsSinceStart);
   updateRecent2mIntervalAndShiftWhenNeeded(&data_buf_3[0], data3, secondsSinceStart);
+  if (secondsSinceStart >= 2400 /*40m*/) {
+    secondsSinceStart = 0;
+  }
+  debugStoredData();
 }
 
 // 2m - 2m - ... 20 of these ... - 2m - 2m - 2m = 10m - 10m - ... 16 of these ... - 10m - 10m = 20m - 20m ... 32 of these ... - 20m = 40m - 40m - ... 128 of these ... - 40m
@@ -197,10 +207,10 @@ void updateRecent2mIntervalAndShiftWhenNeeded(uint8_t * data_buf_pointer, uint8_
   else
   {
     // update first 2m interval
-    *data_buf_pointer = newData;
+    *data_buf_pointer = max(newData, *data_buf_pointer);
   
     // update first 10m interval
-    uint8_t int10m_0 = newData;
+    uint8_t int10m_0 = *data_buf_pointer;
     for (int i = 1; i < 5; i++) {
       uint8_t int2m_i = *(data_buf_pointer + i);
       int10m_0 = max(int10m_0, int2m_i);
@@ -409,7 +419,7 @@ void setup()
   digitalWrite(INTERRUPT_PIN_B, HIGH);
   digitalWrite(LIGHT_SENSOR_PIN, HIGH); // pull it up for light sensor
   
-  VMUtils_WDT::setupWdt(true, VMUtils_WDT::PRSCL::_2s); // must conform to TICK_SECONDS
+  VMUtils_WDT::setupWdt(true, VMUtils_WDT::PRSCL::_500ms); // must conform to TICK_SECONDS
 
   if (!homeCommNetwork.setupRadio(&radio, false)) { // we disable AutoACK here to save battery
     while(true) {
@@ -622,11 +632,9 @@ void readBatteryLevel() // is called every TICK_SECONDS(2) seconds
 }
 
 int sensorsCheckCounter = 0;
-byte lastMagState = 0;
-byte lastLightState = 0;
-byte lasIntsOnPinA = 0;
-byte lasIntsOnPinB = 0;
-byte resetFlag = 1;
+uint8_t lastMagState, lastLightState, lasIntsOnPinA, lasIntsOnPinB;
+uint8_t resetFlag = 1;
+bool cleanFlag = true;
 void loop()
 {
   if (f_wdt == 0) {
@@ -652,21 +660,28 @@ void loop()
         // we check sensors once 4 seconds (2*2)
         #ifdef SERIAL_DEBUG
           _debug("Data");
-          byte _magState = getMagSensorState();
+          uint8_t _magState = getMagSensorState();
           _debug(" m="); _debug(_magState);
           wdt_reset();
-          byte _lightState = getLightSensorState();
+          uint8_t _lightState = getLightSensorState();
           _debug(" l="); _debug(_lightState);
           wdt_reset();
-          byte _intsOnPinA = readInterruptsOnPinA();
+          uint8_t _intsOnPinA = readInterruptsOnPinA();
           _debug(" a="); _debug(_intsOnPinA);
           wdt_reset();
-          byte _intsOnPinB = readInterruptsOnPinB();
+          uint8_t _intsOnPinB = readInterruptsOnPinB();
           _debug(" b="); _debug(_intsOnPinB); _debugln();
           wdt_reset();
-          debugStoredData();
           wdt_reset();
         #endif
+
+        if (cleanFlag) {
+          cleanFlag = false;
+          lastMagState = 0;
+          lastLightState = 0;
+          lasIntsOnPinA = 0;
+          lasIntsOnPinB = 0;
+        }
         lastMagState = max(lastMagState, _magState);
         lastLightState = max(lastLightState, _lightState);
         lasIntsOnPinA = max(lasIntsOnPinA, _intsOnPinA);
@@ -674,12 +689,9 @@ void loop()
         wdt_reset();
       }
       if (sensorsCheckCounter % 15 == 0) { // every 30 seconds we call registerData and attempt transmission
-        registerData(lastMagState, lastLightState, resetFlag);
+        registerDataEvery30Seconds(lastLightState, lastMagState, resetFlag);
         _transmitData(0);
-        lastMagState = 0;
-        lastLightState = 0;
-        lasIntsOnPinA = 0;
-        lasIntsOnPinB = 0;
+        cleanFlag = true;
         resetFlag = 0;
       }
       if (sensorsCheckCounter % 30 == 0) {
