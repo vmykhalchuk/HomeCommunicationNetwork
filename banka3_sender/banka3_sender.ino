@@ -162,14 +162,14 @@ void debugStoredData() {
   #endif
 }
 void __debugStoredData(uint8_t * data_buf_pointer) {
-                            _debug("2m[20]: "); for (int i = 0; i < 20; i++) __debugPrintPoint(*(data_buf_pointer+i)); _debugln();
-  _debug("              "); _debug("10m[16]: "); for (int i = 0; i < 16; i++) __debugPrintPoint(*(data_buf_pointer+20+i)); _debugln();
-  _debug("              "); _debug("20m[32]: "); for (int i = 0; i < 16; i++) __debugPrintPoint(*(data_buf_pointer+20+16+i)); _debugln();
-  _debug("              "); _debug("40m[128]: "); for (int i = 0; i < 16; i++) __debugPrintPoint(*(data_buf_pointer+20+16+32+i)); _debugln();
+                            _debug("2m[20]: "); for (int i = 0; i < 20; i++) __debugPrint2DecNumber(*(data_buf_pointer+i)); _debugln();
+  _debug("              "); _debug("10m[16]: "); for (int i = 0; i < 16; i++) __debugPrint2DecNumber(*(data_buf_pointer+20+i)); _debugln();
+  _debug("              "); _debug("20m[32]: "); for (int i = 0; i < 16; i++) __debugPrint2DecNumber(*(data_buf_pointer+20+16+i)); _debugln();
+  _debug("              "); _debug("40m[128]: "); for (int i = 0; i < 16; i++) __debugPrint2DecNumber(*(data_buf_pointer+20+16+32+i)); _debugln();
 }
 
-void __debugPrintPoint(uint8_t z) {
-  if (z > 10) _debug(z / 10) else _debug('0');
+void __debugPrint2DecNumber(uint8_t z) {
+  if (z >= 10) _debug(z / 10) else _debug('0');
   _debug(z % 10);
   _debug('-');
 }
@@ -579,13 +579,7 @@ uint8_t debugPrintPos(uint8_t * pointer, int pos) {
     z = z >> 4;
   }
 
-  if (z > 10) {
-    _debug(z / 10);
-  } else {
-    _debug(' ');
-  }
-  _debug(z % 10);
-  _debug('-');
+  __debugPrint2DecNumber(z);
 }
 
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=

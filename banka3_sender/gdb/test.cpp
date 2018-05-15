@@ -1,7 +1,10 @@
+//http://cpp.sh/
 //https://www.onlinegdb.com/#
 #include <stdio.h>
 #include <stdint.h>
 #include <algorithm>
+
+using namespace std;
 
 const uint8_t data_buf_size = 20+16+32+128;
 uint8_t data_buf_1[data_buf_size]; // used by light
@@ -61,7 +64,7 @@ void shift2mIntervalAndRecalculate(uint8_t * data_buf_pointer, uint8_t newData, 
     uint8_t val10m_i = *(data_buf_pointer + offset2m_for_10m);
     for (int j = 1; j < 5; j++)
     {
-      val10m_i = std::max(val10m_i, *(data_buf_pointer + offset2m_for_10m + j));
+      val10m_i = max(val10m_i, *(data_buf_pointer + offset2m_for_10m + j));
     }
     *(data_buf_pointer + 20 + i) = val10m_i;
     offset2m_for_10m += 5;
@@ -78,7 +81,7 @@ void shift2mIntervalAndRecalculate(uint8_t * data_buf_pointer, uint8_t newData, 
     uint8_t val20m_i = *(data_buf_pointer + offset_10m_for_20m);
     for (int j = 1; j < 2; j++)
     {
-      val20m_i = std::max(val20m_i, *(data_buf_pointer + offset_10m_for_20m + j));
+      val20m_i = max(val20m_i, *(data_buf_pointer + offset_10m_for_20m + j));
     }
     *(data_buf_pointer + 20 + 16 + i) = val20m_i;
     offset_10m_for_20m += 2;
@@ -93,7 +96,7 @@ void shift2mIntervalAndRecalculate(uint8_t * data_buf_pointer, uint8_t newData, 
     uint8_t val40m_i = *(data_buf_pointer + offset_20m_for_40m);
     for (int j = 1; j < 2; j++)
     {
-      val40m_i = std::max(val40m_i, *(data_buf_pointer + offset_20m_for_40m + j));
+      val40m_i = max(val40m_i, *(data_buf_pointer + offset_20m_for_40m + j));
     }
     *(data_buf_pointer + 20 + 16 + 32 + i) = val40m_i;
     offset_20m_for_40m += 2;
@@ -111,22 +114,22 @@ void updateRecent2mIntervalAndShiftWhenNeeded(uint8_t * data_buf_pointer, uint8_
   else
   {
     // update first 2m interval
-    *data_buf_pointer = std::max(newData, *data_buf_pointer);
+    *data_buf_pointer = max(newData, *data_buf_pointer);
   
     // update first 10m interval
     uint8_t int10m_0 = *data_buf_pointer;
     for (int i = 1; i < 5; i++) {
       uint8_t int2m_i = *(data_buf_pointer + i);
-      int10m_0 = std::max(int10m_0, int2m_i);
+      int10m_0 = max(int10m_0, int2m_i);
     }
     *(data_buf_pointer + 20) = int10m_0;
   
     // update first 20m interval
-    uint8_t int20m_0 = std::max(*(data_buf_pointer + 20 + 0), *(data_buf_pointer + 20 + 1));
+    uint8_t int20m_0 = max(*(data_buf_pointer + 20 + 0), *(data_buf_pointer + 20 + 1));
     *(data_buf_pointer + 20 + 16) = int20m_0;
   
     // update first 40m interval
-    uint8_t int40m_0 = std::max(*(data_buf_pointer + 20 + 16 + 0), *(data_buf_pointer + 20 + 16 + 1));
+    uint8_t int40m_0 = max(*(data_buf_pointer + 20 + 16 + 0), *(data_buf_pointer + 20 + 16 + 1));
     *(data_buf_pointer + 20 + 16 + 32) = int40m_0;
   }
 }
@@ -135,7 +138,7 @@ void updateRecent2mIntervalAndShiftWhenNeeded(uint8_t * data_buf_pointer, uint8_
 
 
 void __debugPrintPoint(uint8_t z) {
-  if (z > 10) printf("%u", z / 10); else printf("0");
+  if (z >= 10) { printf("%u", z / 10); } else {printf("0");}
   printf("%u", z % 10);
   printf("-");
 }
@@ -155,11 +158,12 @@ int main()
 {
     uint8_t t = 255;
     printf("Hello World! %u\n", t);
+    __debugPrintPoint(10);
 
     initDataBuf1and2();
     for (int i = 30; i <= 1230; i+= 30) {
         printf("i=%u\n", i);
-        updateRecent2mIntervalAndShiftWhenNeeded(&data_buf_1[0], 5, i);
+        updateRecent2mIntervalAndShiftWhenNeeded(&data_buf_1[0], (i < 1000 ? 5 : 10), i);
         updateRecent2mIntervalAndShiftWhenNeeded(&data_buf_2[0], (i== 30 ? 1 : 0), i);
     }
 

@@ -72,7 +72,7 @@ uint8_t debugPrintPos(uint8_t * pointer, int pos) {
     z = z >> 4;
   }
 
-  if (z > 10) _debug(z / 10) else _debug('0');
+  if (z >= 10) _debug(z / 10) else _debug('0');
   _debug(z % 10);
   _debug('-');
 }
