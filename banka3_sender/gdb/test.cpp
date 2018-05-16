@@ -1,4 +1,6 @@
 //http://cpp.sh/
+//https://ideone.com
+//http://codepad.org
 //https://www.onlinegdb.com/#
 #include <stdio.h>
 #include <stdint.h>
