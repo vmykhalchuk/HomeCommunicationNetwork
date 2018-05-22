@@ -7,7 +7,7 @@ byte addressMaster[6] = "MNode";
 byte addressSlave[6] = "SNode";
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(57600);
   
   radio.begin();
   // Set the PA Level low to prevent power supply related issues since this is a
