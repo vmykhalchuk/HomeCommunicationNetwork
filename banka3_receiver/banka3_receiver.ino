@@ -55,6 +55,10 @@ void setup()
 
 void logResetSinceTime(uint16_t resetSinceMinutes)
 {
+  if (resetSinceMinutes == 0xFFFF) {
+    _debug("more than 45 days");
+    return;
+  }
   uint16_t days = resetSinceMinutes / (24*60);
   uint16_t hours = resetSinceMinutes / 60;
   uint16_t minutesInLastHour = resetSinceMinutes % 60;

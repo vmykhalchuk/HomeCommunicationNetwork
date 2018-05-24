@@ -30,7 +30,7 @@
 /**
  * DEFINE BEFORE UPLOAD :: START
  */
-#define SERIAL_DEBUG Serial
+//#define SERIAL_DEBUG Serial
 static const byte BANKA_DEV_ID = 0x11; // ID of this Banka(R)
 const byte zoomerPin = 5; // cannot be 13 (Arduino LED) since radio is using it!
 const byte INTERRUPT_PIN_A = 2;
@@ -202,6 +202,10 @@ void debugPrintPos(uint8_t * pointer, int pos) {
 
 void logResetSinceTime(uint16_t resetSinceMinutes)
 {
+  if (resetSinceMinutes == 0xFFFF) {
+    _debug("more than 45 days");
+    return;
+  }
   uint16_t days = resetSinceMinutes / (24*60);
   uint16_t hours = resetSinceMinutes / 60;
   uint16_t minutesInLastHour = resetSinceMinutes % 60;
@@ -484,7 +488,7 @@ void setup()
   digitalWrite(INTERRUPT_PIN_B, HIGH);
   digitalWrite(LIGHT_SENSOR_PIN, HIGH); // pull it up for light sensor
   
-  VMUtils_WDT::setupWdt(true, VMUtils_WDT::PRSCL::_500ms); // must conform to TICK_SECONDS
+  VMUtils_WDT::setupWdt(true, VMUtils_WDT::PRSCL::_2s); // must conform to TICK_SECONDS
 
   if (!homeCommNetwork.setupRadio(&radio, false)) { // we disable AutoACK here to save battery
     while(true) {
@@ -618,12 +622,20 @@ byte getLightSensorState()
   return map(v, 0, 1023, 0, 1<<4 - 1);
 }
 
+uint16_t resetSinceMinutes = 0;
+uint8_t resetSinceSeconds = 0;
+void increaseResetSinceCounters() {
+  resetSinceSeconds += TICK_SECONDS;
+  if (resetSinceSeconds >= 60) {
+    if (resetSinceMinutes < 0xFFFF) resetSinceMinutes++;
+    resetSinceSeconds = resetSinceSeconds % 60;
+  }
+}
 
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 /// >> transmission area start!
 
-uint16_t resetSinceMinutes = 0;
 // type - 0 - normal transmission
 //        1 - start-up transmission
 //        2 - wdt overrun transmission
@@ -669,7 +681,6 @@ void readBatteryLevel() // is called every TICK_SECONDS(2) seconds
 
 int sensorsCheckCounter = 0;
 uint8_t lastMagState, lastLightState, lasIntsOnPinA, lasIntsOnPinB;
-uint8_t resetSinceSeconds = 0;
 bool cleanFlag = true;
 void loop()
 {
@@ -689,7 +700,9 @@ void loop()
         digitalWrite(zoomerPin, LOW);
       #endif
       
+      increaseResetSinceCounters();
       readBatteryLevel();
+
 
       sensorsCheckCounter++;
       if (sensorsCheckCounter % 2 == 0) {
@@ -727,10 +740,6 @@ void loop()
         registerDataEvery30Seconds(lastLightState, lastMagState, lasIntsOnPinA);
         _transmitData(0);
         cleanFlag = true;
-        if (++resetSinceSeconds == 60) {
-          if (resetSinceMinutes < 0xFFFF) resetSinceMinutes++;
-          resetSinceSeconds = 0;
-        }
       }
       if (sensorsCheckCounter % 30 == 0) {
         sensorsCheckCounter = 0;
