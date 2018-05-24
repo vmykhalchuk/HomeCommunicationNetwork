@@ -99,7 +99,8 @@
 class Adafruit_HMC5883_Unified : public Adafruit_Sensor
 {
   public:
-    Adafruit_HMC5883_Unified(int32_t sensorID = -1);
+	// slowMode means more energy efficient mode. Though tt will measure with 0.75Hz rate comparing to default 15Hz rate.
+    Adafruit_HMC5883_Unified(int32_t sensorID = -1, bool slowMode = false);
   
     bool begin(void);
     void setMagGain(hmc5883MagGain gain);
@@ -110,6 +111,7 @@ class Adafruit_HMC5883_Unified : public Adafruit_Sensor
     hmc5883MagGain   _magGain;
     hmc5883MagData   _magData;     // Last read magnetometer data will be available here
     int32_t         _sensorID;
+	bool _slowMode;
     
     void write8(byte address, byte reg, byte value);
     byte read8(byte address, byte reg);

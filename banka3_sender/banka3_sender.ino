@@ -65,14 +65,11 @@ const byte addressSlave[6] = {'S', 'B', 'a', '2', BANKA_DEV_ID};
 
 /**
  * This system is waking up once a tick and performs actions as fast as possible to go sleep again.
- * Every tick is: 2 seconds
+ * Every tick is: 4 seconds
  */
-static const byte TICK_SECONDS = 2;
+static const byte TICK_SECONDS = 4;
 
-static const byte SEND_TRANSMISSION_TRESHOLD = 48/TICK_SECONDS; // every tick is every TICK_SECONDS(2) seconds,
-                                                  // then TICK_SECONDS*12 = 48 seconds between transmissions
-
-Adafruit_HMC5883_Unified mag = Adafruit_HMC5883_Unified(12345);
+Adafruit_HMC5883_Unified mag = Adafruit_HMC5883_Unified(12345, true);
 
 /* Hardware configuration: Set up nRF24L01 radio on SPI bus plus pins 7 & 8 */
 RF24 radio(7,8);
@@ -486,9 +483,9 @@ void setup()
   pinMode(LIGHT_SENSOR_PIN, INPUT);
   digitalWrite(INTERRUPT_PIN_A, HIGH);
   digitalWrite(INTERRUPT_PIN_B, HIGH);
-  digitalWrite(LIGHT_SENSOR_PIN, HIGH); // pull it up for light sensor
+  digitalWrite(LIGHT_SENSOR_PIN, HIGH); // enable pull up for light sensor
   
-  VMUtils_WDT::setupWdt(true, VMUtils_WDT::PRSCL::_2s); // must conform to TICK_SECONDS
+  VMUtils_WDT::setupWdt(true, VMUtils_WDT::PRSCL::_4s); // must conform to TICK_SECONDS
 
   if (!homeCommNetwork.setupRadio(&radio, false)) { // we disable AutoACK here to save battery
     while(true) {
@@ -618,7 +615,9 @@ byte getMagSensorState()
 
 byte getLightSensorState()
 {
+  //digitalWrite(LIGHT_SENSOR_PIN, HIGH);
   int v = 1023 - constrain(analogRead(LIGHT_SENSOR_PIN), 0, 1023);
+  //digitalWrite(LIGHT_SENSOR_PIN, LOW);
   return map(v, 0, 1023, 0, 1<<4 - 1);
 }
 
@@ -670,7 +669,7 @@ void _transmitData(byte type)
 /// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 int readBatteryLevelCounter = 0;
-void readBatteryLevel() // is called every TICK_SECONDS(2) seconds
+void readBatteryLevel() // is called every TICK_SECONDS(4) seconds
 {
   if (readBatteryLevelCounter++ > ((60/TICK_SECONDS)*12)) // read battery measurement every 12 minutes
   {
@@ -679,7 +678,7 @@ void readBatteryLevel() // is called every TICK_SECONDS(2) seconds
   }
 }
 
-int sensorsCheckCounter = 0;
+uint8_t transmitMessageSeconds = 0;
 uint8_t lastMagState, lastLightState, lasIntsOnPinA, lasIntsOnPinB;
 bool cleanFlag = true;
 void loop()
@@ -704,9 +703,8 @@ void loop()
       readBatteryLevel();
 
 
-      sensorsCheckCounter++;
-      if (sensorsCheckCounter % 2 == 0) {
-        // we check sensors once 4 seconds (2*2)
+      {
+        // we check sensors once 4 seconds
         uint8_t _magState = getMagSensorState();
         uint8_t _lightState = getLightSensorState();
         wdt_reset();
@@ -736,13 +734,13 @@ void loop()
         lasIntsOnPinB = max(lasIntsOnPinB, _intsOnPinB);
         wdt_reset();
       }
-      if (sensorsCheckCounter % 15 == 0) { // every 30 seconds we call registerData and attempt transmission
+      
+      transmitMessageSeconds += TICK_SECONDS;
+      if (transmitMessageSeconds >= 30) { // every 30 seconds we call registerData and attempt transmission
         registerDataEvery30Seconds(lastLightState, lastMagState, lasIntsOnPinA);
         _transmitData(0);
+        transmitMessageSeconds = transmitMessageSeconds % 30;
         cleanFlag = true;
-      }
-      if (sensorsCheckCounter % 30 == 0) {
-        sensorsCheckCounter = 0;
       }
 
     }
