@@ -140,9 +140,9 @@ void Adafruit_HMC5883_Unified::read()
     @brief  Instantiates a new Adafruit_HMC5883 class
 */
 /**************************************************************************/
-Adafruit_HMC5883_Unified::Adafruit_HMC5883_Unified(int32_t sensorID/* = -1*/, bool slowMode/* = false*/) {
+Adafruit_HMC5883_Unified::Adafruit_HMC5883_Unified(int32_t sensorID/* = -1*/, hmc5883Mode mode/* = HMC5883_MODE_DEFAULT*/) {
   _sensorID = sensorID;
-  _slowMode = slowMode;
+  _mode = mode;
 }
 
 /***************************************************************************
@@ -159,16 +159,19 @@ bool Adafruit_HMC5883_Unified::begin()
   // Enable I2C
   Wire.begin();
 
-  // Enable the magnetometer
-  write8(HMC5883_ADDRESS_MAG, HMC5883_REGISTER_MAG_MR_REG_M, 0x00);
+  if (_mode != HMC5883_MODE_SINGLE_MEASUREMENT) {
+    // Enable continuous measurement mode
+    write8(HMC5883_ADDRESS_MAG, HMC5883_REGISTER_MAG_MR_REG_M, 0x00);
+  }
 
-  if (_slowMode) {
+  if (_mode == HMC5883_MODE_CONTINUOUS_ULTRA_SLOW) {
     // set configuration:
     //	samples average (default): 00 (1 - sample)
     //    data output rate (slow mode): 000 (0.75 Hz; default is 100 - 15 Hz)
     //    measurement config mode (default): 00 (normal mode)
-    write8(HMC5883_ADDRESS_MAG, HMC5883_REGISTER_MAG_CRA_REG_M, (byte)0x00);
+    write8(HMC5883_ADDRESS_MAG, HMC5883_REGISTER_MAG_CRA_REG_M, 0x00);
   }
+	  
   
   // Set the gain to a known level
   setMagGain(HMC5883_MAGGAIN_1_3);
@@ -226,6 +229,12 @@ void Adafruit_HMC5883_Unified::setMagGain(hmc5883MagGain gain)
 */
 /**************************************************************************/
 bool Adafruit_HMC5883_Unified::getEvent(sensors_event_t *event) {
+  if (_mode == HMC5883_MODE_SINGLE_MEASUREMENT) {
+    // Kick-off single measurement
+    write8(HMC5883_ADDRESS_MAG, HMC5883_REGISTER_MAG_MR_REG_M, 0x01);
+    delay(7);
+  }
+
   /* Clear the event */
   memset(event, 0, sizeof(sensors_event_t));
 

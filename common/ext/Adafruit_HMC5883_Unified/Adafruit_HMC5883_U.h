@@ -13,6 +13,9 @@
   Written by Kevin Townsend for Adafruit Industries.  
   BSD license, all text above must be included in any redistribution
  ***************************************************************************/
+
+// Datasheet: https://cdn-shop.adafruit.com/datasheets/HMC5883L_3-Axis_Digital_Compass_IC.pdf
+ 
 #ifndef __HMC5883_H__
 #define __HMC5883_H__
 
@@ -77,6 +80,17 @@
 /*=========================================================================*/
 
 /*=========================================================================
+    MAGNETOMETER WORKING MODE
+    -----------------------------------------------------------------------*/
+    typedef enum
+    {
+      HMC5883_MODE_DEFAULT                       = 0x01, // Continuous measurement mode, 15 Hz
+      HMC5883_MODE_CONTINUOUS_ULTRA_SLOW         = 0x02, // Continuous measurement mode, 0.75 Hz
+      HMC5883_MODE_SINGLE_MEASUREMENT            = 0x03  // Single measurement mode
+    } hmc5883Mode;
+/*=========================================================================*/
+
+/*=========================================================================
     INTERNAL MAGNETOMETER DATA TYPE
     -----------------------------------------------------------------------*/
     typedef struct hmc5883MagData_s
@@ -99,8 +113,7 @@
 class Adafruit_HMC5883_Unified : public Adafruit_Sensor
 {
   public:
-	// slowMode means more energy efficient mode. Though tt will measure with 0.75Hz rate comparing to default 15Hz rate.
-    Adafruit_HMC5883_Unified(int32_t sensorID = -1, bool slowMode = false);
+    Adafruit_HMC5883_Unified(int32_t sensorID = -1, hmc5883Mode mode = HMC5883_MODE_DEFAULT);
   
     bool begin(void);
     void setMagGain(hmc5883MagGain gain);
@@ -111,7 +124,7 @@ class Adafruit_HMC5883_Unified : public Adafruit_Sensor
     hmc5883MagGain   _magGain;
     hmc5883MagData   _magData;     // Last read magnetometer data will be available here
     int32_t         _sensorID;
-	bool _slowMode;
+	hmc5883Mode _mode;
     
     void write8(byte address, byte reg, byte value);
     byte read8(byte address, byte reg);

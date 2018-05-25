@@ -69,7 +69,7 @@ const byte addressSlave[6] = {'S', 'B', 'a', '2', BANKA_DEV_ID};
  */
 static const byte TICK_SECONDS = 4;
 
-Adafruit_HMC5883_Unified mag = Adafruit_HMC5883_Unified(12345, true);
+Adafruit_HMC5883_Unified mag = Adafruit_HMC5883_Unified(12345, HMC5883_MODE_SINGLE_MEASUREMENT);
 
 /* Hardware configuration: Set up nRF24L01 radio on SPI bus plus pins 7 & 8 */
 RF24 radio(7,8);
